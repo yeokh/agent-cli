@@ -59,7 +59,7 @@ The Claude Agent SDK manages this loop automatically. Your code supplies:
 
 ```bash
 cd claude-agent
-export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY / OPENROUTER_API_KEY
+export ANTHROPIC_API_KEY=<redacted-anthropic-api-key>   # or OPENAI_API_KEY / OPENROUTER_API_KEY
 python web_app.py
 ```
 

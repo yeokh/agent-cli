@@ -10,11 +10,11 @@ $ cat ~/.pi/agent/auth.json
 {
   "anthropic": {
     "type": "api_key",
-    "key": "sk-ant-api03-5JV5gYFEspeuI..."
+    "key": "<redacted-anthropic-api-key>"
   },
   "openrouter": {
     "type": "api_key",
-    "key": "sk-or-v1-1b0f0660232..."
+    "key": "<redacted-openrouter-api-key>"
   }
 }
 
@@ -27,7 +27,7 @@ podman build -t pi-agent:latest -f Containerfile
 mkdir agent inbox outbox
 sudo chown -R 1001:0 outbox
 
-podman run -it --rm -e OPENAI_API_KEY=sk-xxx     \
+podman run -it --rm -e OPENAI_API_KEY=<redacted-api-key>     \
        -v ./agent:/opt/app-root/src/agent:ro,z   \
        -v ./inbox:/opt/app-root/src/inbox:ro,z   \
        -v ./outbox:/opt/app-root/src/outbox:rw,z \

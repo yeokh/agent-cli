@@ -72,7 +72,7 @@ Smolagents: one ActionStep per complete reasoning+tool cycle
 
 ```bash
 cd smolagents
-export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY / OPENROUTER_API_KEY
+export ANTHROPIC_API_KEY=<redacted-anthropic-api-key>   # or OPENAI_API_KEY / OPENROUTER_API_KEY
 python web_app.py
 ```
 

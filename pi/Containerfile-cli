@@ -2,7 +2,7 @@
 # pi cli container image
 # Build:  podman build -t pi-cli:v1 -f Containerfile .
 # Run:    podman run --rm -it -e OPENAI_API_KEY=mykey pi-cli:v1
-#         podman run --rm -it -e OPENROUTER_API_KEY="sk-or-v1-..." localhost/pi-cli:v1 /bin/bash
+#         podman run --rm -it -e OPENROUTER_API_KEY="<redacted-openrouter-api-key>" localhost/pi-cli:v1 /bin/bash
 # pi :    --help, --list-models ...
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -5,7 +5,7 @@
 
   vars:
     db_user: "admin"
-    db_password: "SuperSecret123"   # Hardcoded exposed credential
+    db_password: "REDACTED_PASSWORD"   # Hardcoded exposed credential
     user_input: "{{ lookup('env','USER_INPUT') }}"  # Potentially unsafe variable
 
   tasks:

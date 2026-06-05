@@ -25,7 +25,7 @@ cd smolagents
 pip install -e .                         # installs smolagents[litellm] + flask
 cp .env.example .env
 # edit .env and set at least one API key
-source .env  # or: export ANTHROPIC_API_KEY=sk-ant-...
+source .env  # or: export ANTHROPIC_API_KEY=<redacted-anthropic-api-key>
 python web_app.py
 ```
 

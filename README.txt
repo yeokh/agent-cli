@@ -77,7 +77,7 @@ name = "openrouter"
 base_url="https://openrouter.ai/api/v1"
 env_key="OPENROUTER_API_KEY"
 
-# export OPENROUTER_API_KEY="sk-or-..."
+# export OPENROUTER_API_KEY="<redacted-openrouter-api-key>"
 
 # cd /path/to/your/project
 # codex 
@@ -98,7 +98,7 @@ https://pi.dev/
 https://github.com/earendil-works/pi
 curl -fsSL https://pi.dev/install.sh | sh
 
-# export ANTHROPIC_API_KEY=sk-ant-...
+# export ANTHROPIC_API_KEY=<redacted-anthropic-api-key>
 # pi
 /login
 

@@ -38,7 +38,7 @@ https://kiro.dev/cli/
      1+  {
      2+    "result": "Fail",
      +    "reason": "Multiple vulnerabilities detected: (1) Hardcoded credentials found in variable definitions
-     (db_password: 'SuperSecret123'). (2) Command injection risk due to unsafe use of shell with unvalidated input (rm
+     (db_password: 'REDACTED_PASSWORD'). (2) Command injection risk due to unsafe use of shell with unvalidated input (rm
      -rf /home/{{ user_input }}). (3) Exposed credentials in command line (mysql password passed as plaintext argument).
      (4) Insecure file permissions on private key (mode 0644 instead of 0600)."
      4+  }

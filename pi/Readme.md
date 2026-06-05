@@ -5,7 +5,7 @@ curl -fsSL https://pi.dev/install.sh | sh
 
 npm list -g --depth=0
 
-export ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=<redacted-anthropic-api-key>
 pi
 /login
 

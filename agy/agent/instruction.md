@@ -52,7 +52,7 @@ The agent should focus on detecting the following categories of vulnerabilities:
   }
   ```
 
-- Playbook with `vars: { db_password: "SuperSecret123" }` →  
+- Playbook with `vars: { db_password: "REDACTED_PASSWORD" }` →  
   ```json
   {
     "result": "Fail",

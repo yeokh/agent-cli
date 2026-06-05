@@ -14,7 +14,7 @@ base_url="https://openrouter.ai/api/v1"
 env_key="OPENROUTER_API_KEY"
 
 >>
-export OPENROUTER_API_KEY="sk-or-..."
+export OPENROUTER_API_KEY="<redacted-openrouter-api-key>"
 
 >>
 cd /path/to/your/project

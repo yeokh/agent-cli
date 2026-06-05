@@ -7,7 +7,7 @@ Status: Complete
 File 1: playbook-w-vul-1.yaml
 - Status: FAILED
 - Vulnerabilities Found:
-  * Exposed Credentials: Hardcoded db_password "SuperSecret123" in vars section
+  * Exposed Credentials: Hardcoded db_password "REDACTED_PASSWORD" in vars section
   * Command Injection: Unsafe shell command with unvalidated {{ user_input }} variable
   * Exposed Credentials: MySQL password exposed in command line arguments
   * Insecure Practices: SSH private key file with insufficient permissions (0644)
