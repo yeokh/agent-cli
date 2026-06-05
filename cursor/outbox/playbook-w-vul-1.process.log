@@ -1,0 +1,3 @@
+Processed /root/cursor/inbox/playbook-w-vul-1.yaml.
+Findings: unsafe shell command with unvalidated input, hardcoded database password, and insecure private key handling.
+Verdict: Fail.

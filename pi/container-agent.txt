@@ -1,0 +1,37 @@
+### Build the container ###
+
+Edit a Containerfile for pi cli/agent 
+
+You can set the API keys environment variables (e.g., ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY) 
+or add them directly into the agent's configuration file:
+
+$ cat ~/.pi/agent/auth.json
+
+{
+  "anthropic": {
+    "type": "api_key",
+    "key": "sk-ant-api03-5JV5gYFEspeuI..."
+  },
+  "openrouter": {
+    "type": "api_key",
+    "key": "sk-or-v1-1b0f0660232..."
+  }
+}
+
+Ref: https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/providers.md#api-keys
+
+
+### Run test ###
+
+podman build -t pi-agent:latest -f Containerfile
+mkdir agent inbox outbox
+sudo chown -R 1001:0 outbox
+
+podman run -it --rm -e OPENAI_API_KEY=sk-xxx     \
+       -v ./agent:/opt/app-root/src/agent:ro,z   \
+       -v ./inbox:/opt/app-root/src/inbox:ro,z   \
+       -v ./outbox:/opt/app-root/src/outbox:rw,z \
+       localhost/pi-agent:latest
+
+If error with outbox, do chmod 777 outbox or remove the z flag for the outbox.
+Or disable SELinux labelling for the container with podman run -it --rm --security-opt label=disable ...

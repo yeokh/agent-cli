@@ -1,0 +1,4 @@
+{
+  "result": "Fail",
+  "reason": "Command injection risk detected due to unsafe shell and command usage with unvalidated input. Hardcoded credentials were found in playbook variables, and a private key is copied with insecure file permissions."
+}

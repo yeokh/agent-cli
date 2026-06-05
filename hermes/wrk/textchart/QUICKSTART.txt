@@ -1,0 +1,278 @@
+================================================================================
+QUICK START GUIDE - Text-Based Charts with Python
+================================================================================
+
+PROJECT LOCATION: /root/hermes/wrk/textchart/
+
+================================================================================
+FIRST TIME SETUP (One-time only)
+================================================================================
+
+1. Navigate to project directory:
+   $ cd /root/hermes/wrk/textchart
+
+2. Create Python virtual environment:
+   $ python3 -m venv venv
+
+3. Activate environment:
+   $ source venv/bin/activate
+
+4. Install dependencies:
+   $ pip install pandas requests asciichartpy plotext tplot
+
+Done! You're ready to run the scripts.
+
+================================================================================
+RUNNING THE SCRIPTS
+================================================================================
+
+BEFORE EVERY SESSION - Activate the environment:
+   $ cd /root/hermes/wrk/textchart
+   $ source venv/bin/activate
+
+THEN CHOOSE A SCRIPT:
+
+Option 1: MAIN ANALYSIS (Recommended for first run)
+   $ python3 analyze_titanic.py
+   
+   This will:
+   • Download Titanic dataset (891 passengers)
+   • Show statistical analysis
+   • Generate 9 charts in terminal
+   • Create titanic.csv for future use
+   Duration: ~5 seconds
+
+Option 2: TPLOT EXAMPLES
+   $ python3 tplot_examples.py
+   
+   This will:
+   • Use existing titanic.csv
+   • Create 8 simple bar charts
+   • Show data distributions
+   Duration: ~2 seconds
+
+Option 3: LIBRARY COMPARISON
+   $ python3 comparison.py
+   
+   This will:
+   • Show same data in 3 different libraries
+   • Display visual differences
+   • Include feature comparison table
+   Duration: ~3 seconds
+
+================================================================================
+FILE OVERVIEW
+================================================================================
+
+Scripts (Run these):
+  • analyze_titanic.py      → Main analysis with charts
+  • tplot_examples.py       → Additional simple charts
+  • comparison.py           → Library comparison demo
+
+Data:
+  • titanic.csv             → Titanic dataset (892 rows, 12 columns)
+
+Documentation:
+  • README.md               → Full documentation
+  • SUMMARY.txt             → Project overview
+  • QUICKSTART.txt          → This file
+
+Virtual Environment:
+  • venv/                   → Python packages (not needed to view)
+
+================================================================================
+EXAMPLE OUTPUT
+================================================================================
+
+When you run analyze_titanic.py, you'll see:
+
+1. Data Summary:
+   Total Passengers: 891
+   Survived: 342 (38.4%)
+   Average Age: 29.7 years
+   
+   Female: 233/314 survived (74.2%)
+   Male:   109/577 survived (18.9%)
+
+2. ASCIICHARTPY Charts (Line graphs):
+   468.00  ┤
+   428.11  ┤╭
+   388.22  ┤│
+   ...
+
+3. PLOTEXT Charts (Bar charts):
+   First  ▇▇▇▇▇▇▇▇▇▇▇▇▇▇ 62.96
+   Second ▇▇▇▇▇▇▇▇▇▇ 47.28
+   Third  ▇▇▇▇▇ 24.24
+
+4. Key Findings:
+   • Females: 74.2% survival rate
+   • Males: 18.9% survival rate
+   • First class: 63% survival rate
+   • Third class: 24.2% survival rate
+
+================================================================================
+LIBRARY SUMMARY
+================================================================================
+
+ASCIICHARTPY - Line Charts
+  Best for: Trends, time series
+  Output: ASCII line drawings
+  Complexity: Low
+  
+PLOTEXT - Bar Charts & Histograms
+  Best for: Dashboards, reports
+  Output: Unicode bars (▇▇▇)
+  Complexity: Medium
+  Features: Colors, multiple chart types
+  
+TPLOT - Simple Bars
+  Best for: Quick visualization
+  Output: Unicode blocks (█)
+  Complexity: Very Low
+  Features: Minimal setup needed
+
+================================================================================
+TIPS & TRICKS
+================================================================================
+
+1. Maximize Terminal Width
+   Charts adapt to terminal size. Make your terminal wider for better display.
+
+2. Run All Scripts in Sequence
+   $ python3 analyze_titanic.py && python3 tplot_examples.py && python3 comparison.py
+   
+   This shows all three libraries in action.
+
+3. Customize the Data
+   Edit the scripts to:
+   • Change age bins
+   • Filter by different criteria
+   • Add new calculations
+   • Create different chart types
+
+4. Use Different CSV Files
+   Modify line in tplot_examples.py:
+   $ df = pd.read_csv('your_file.csv')  # Replace titanic.csv
+
+5. Scroll Back in Terminal
+   Some output may scroll off screen. Scroll up to see all charts.
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Issue: "ModuleNotFoundError: No module named 'pandas'"
+Solution: Make sure venv is activated: source venv/bin/activate
+
+Issue: "Command not found: python3"
+Solution: Make sure Python 3.8+ is installed: python3 --version
+
+Issue: Charts look ugly/misaligned
+Solution: 
+  • Make terminal wider (at least 80 chars)
+  • Check terminal encoding is UTF-8
+  • Try maximizing terminal window
+
+Issue: Network error downloading data
+Solution:
+  • Check internet connection
+  • Try running again (temporary network issue)
+  • titanic.csv is created after first run, subsequent runs use local copy
+
+================================================================================
+WHAT YOU'LL LEARN
+================================================================================
+
+From this project, you'll understand:
+
+1. Data Analysis Basics
+   • How to load CSV files with pandas
+   • Grouping and aggregating data
+   • Statistical calculations
+
+2. Chart Libraries
+   • Asciichartpy: Simple ASCII line charts
+   • Plotext: Professional terminal charts
+   • Tplot: Lightweight bar rendering
+
+3. Terminal Visualization
+   • Unicode character usage for graphics
+   • Responsive terminal output
+   • Data scaling for visual display
+
+4. Python Scripting
+   • Virtual environments
+   • Package management
+   • Data processing workflows
+
+5. Data Insights
+   • How the Titanic dataset tells a story
+   • Survival patterns and correlations
+   • Statistical patterns in historical data
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+After running the basic examples:
+
+1. Modify the scripts:
+   • Change chart parameters
+   • Filter data differently
+   • Add new visualizations
+
+2. Use your own data:
+   • Load different CSV files
+   • Create charts for your data
+   • Analyze patterns
+
+3. Explore the libraries:
+   • Read official documentation
+   • Try different chart types
+   • Experiment with colors (Plotext)
+
+4. Build tools:
+   • Create monitoring dashboards
+   • Build data analysis scripts
+   • Develop terminal applications
+
+================================================================================
+RECOMMENDED READING
+================================================================================
+
+After this project, explore:
+  • Pandas documentation: Data manipulation
+  • Plotext GitHub: Advanced chart features
+  • Terminal UI libraries: Rich, Blessed, Curses
+  • Data visualization: Best practices
+
+================================================================================
+SUPPORT & RESOURCES
+================================================================================
+
+Libraries Used:
+  • Pandas: https://pandas.pydata.org/
+  • Asciichartpy: https://github.com/pawamoy/python-asciichartpy
+  • Plotext: https://github.com/piccolomo/plotext
+
+Datasets:
+  • Titanic: pandas built-in dataset
+  • Kaggle: https://kaggle.com (many datasets available)
+
+Python Learning:
+  • Real Python: https://realpython.com/
+  • Python Docs: https://docs.python.org/3/
+
+================================================================================
+YOU'RE ALL SET!
+================================================================================
+
+Run your first script:
+  $ cd /root/hermes/wrk/textchart
+  $ source venv/bin/activate
+  $ python3 analyze_titanic.py
+
+Enjoy exploring data in the terminal!
+
+================================================================================

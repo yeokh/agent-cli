@@ -1,0 +1,391 @@
+================================================================================
+TEXT-BASED CHARTS PROJECT - INDEX & GUIDE
+================================================================================
+
+START HERE: Read this file first!
+
+Project Location: /root/hermes/wrk/textchart/
+Project Size: 169 MB (mostly venv/)
+Environment: Python 3.13 virtual environment
+
+================================================================================
+WHAT IS THIS PROJECT?
+================================================================================
+
+This project demonstrates how to create text-based charts in Python using three
+popular terminal plotting libraries:
+
+• ASCIICHARTPY  - ASCII line charts
+• PLOTEXT       - Professional bar charts & histograms  
+• TPLOT         - Simple Unicode bar visualizations
+
+The project includes:
+✓ Real-world dataset (Titanic survival data - 891 passengers)
+✓ Complete statistical analysis
+✓ 9+ different chart examples
+✓ Full documentation
+✓ Working Python scripts ready to run
+
+================================================================================
+FILES OVERVIEW
+================================================================================
+
+📄 QUICK START GUIDES:
+   • QUICKSTART.txt      ← Read this for setup & first run
+   • INDEX.txt           ← This file
+   • SUMMARY.txt         ← Project overview
+
+📊 MAIN SCRIPTS:
+   • analyze_titanic.py  ← RUN THIS FIRST (main analysis)
+   • comparison.py       ← Compare all 3 libraries
+   • tplot_examples.py   ← Simple Tplot visualizations
+
+📚 DOCUMENTATION:
+   • README.md           ← Comprehensive guide
+
+📦 DATA:
+   • titanic.csv         ← 891 passengers, 12 columns
+
+🔧 ENVIRONMENT:
+   • venv/               ← Python packages (auto-installed)
+
+================================================================================
+QUICK START (COPY-PASTE)
+================================================================================
+
+First time setup (one-time only):
+─────────────────────────────────
+cd /root/hermes/wrk/textchart
+python3 -m venv venv
+source venv/bin/activate
+pip install pandas requests asciichartpy plotext tplot
+
+
+Run the main analysis:
+─────────────────────
+cd /root/hermes/wrk/textchart
+source venv/bin/activate
+python3 analyze_titanic.py
+
+
+View the output:
+────────────────
+scroll up to see all charts and analysis
+
+================================================================================
+WHAT EACH SCRIPT DOES
+================================================================================
+
+1️⃣ analyze_titanic.py (RECOMMENDED FIRST)
+   ✓ Downloads Titanic dataset (891 passengers)
+   ✓ Performs statistical analysis
+   ✓ Generates 9 charts:
+     - Survival by Gender (Asciichartpy)
+     - Survival by Class (Plotext bar)
+     - Age Distribution (Asciichartpy)
+     - Fare Distribution (Plotext histogram)
+     - Port Analysis (both formats)
+     - Family Size Impact (Asciichartpy)
+     - Class & Gender Combined (Plotext)
+     - Passenger Distribution (Asciichartpy)
+   ✓ Shows key findings
+   Duration: ~5 seconds
+
+2️⃣ tplot_examples.py
+   ✓ Uses Titanic data from CSV
+   ✓ Creates 8 simple bar charts:
+     - Survival counts
+     - Rates by class
+     - Age groups
+     - Fare ranges
+     - Port distribution
+     - Family size
+     - Cabin distribution
+   ✓ Quick and simple visualizations
+   Duration: ~2 seconds
+
+3️⃣ comparison.py
+   ✓ Shows same data in 3 different libraries
+   ✓ Visual differences demonstrated
+   ✓ Feature comparison table included
+   Duration: ~3 seconds
+
+================================================================================
+KEY FINDINGS (Titanic Data)
+================================================================================
+
+Overall: 342/891 survived (38.4%)
+
+By Gender:
+  Female: 233/314 (74.2%) ✓✓✓
+  Male:   109/577 (18.9%) ✗
+
+By Class:
+  1st: 136/216 (63.0%) ✓✓
+  2nd:  87/184 (47.3%) ⚬
+  3rd: 119/491 (24.2%) ✗
+
+Combined (Best to Worst):
+  1st Class Female: 96.8% (best)
+  2nd Class Female: 92.1%
+  3rd Class Female: 50.0%
+  1st Class Male:   36.9%
+  2nd Class Male:   15.7%
+  3rd Class Male:   13.5% (worst)
+
+================================================================================
+LIBRARIES EXPLAINED
+================================================================================
+
+📈 ASCIICHARTPY
+   Use for: Line charts, trends, time series
+   Style: ASCII line drawing
+   Example:
+     468.00  ┤
+     428.11  ┤╭
+     388.22  ┤│
+   Complexity: Low
+   Pro: Lightweight, smooth curves
+   Con: Limited chart types
+
+📊 PLOTEXT
+   Use for: Dashboards, reports, professional output
+   Style: Unicode block bars (▇▇▇)
+   Example:
+     First  ▇▇▇▇▇▇▇▇▇▇▇▇▇ 62.96
+     Second ▇▇▇▇▇▇▇▇▇▇ 47.28
+     Third  ▇▇▇▇▇ 24.24
+   Complexity: Medium
+   Pro: Best-looking, many chart types, colors
+   Con: More setup
+
+📉 TPLOT
+   Use for: Quick visualization, minimal setup
+   Style: Unicode block bars (█)
+   Example:
+     First Class  ███████████████████████████ 63.0%
+     Second Class ███████████████ 47.3%
+     Third Class  ████████ 24.2%
+   Complexity: Very Low
+   Pro: Simplest, fastest
+   Con: Limited features
+
+================================================================================
+WHEN TO USE EACH LIBRARY
+================================================================================
+
+ASCIICHARTPY:
+  ✓ When showing trends over time
+  ✓ When you need line charts
+  ✓ When minimal dependencies matter
+  ✗ Don't use for simple bar comparisons
+
+PLOTEXT:
+  ✓ When building dashboards
+  ✓ When presentation quality matters
+  ✓ When you need multiple chart types
+  ✗ Don't use if minimal dependencies needed
+
+TPLOT:
+  ✓ When you need quick results
+  ✓ When dependencies should be minimal
+  ✓ When simple bars are enough
+  ✗ Don't use for complex visualizations
+
+================================================================================
+RUNNING THE SCRIPTS
+================================================================================
+
+Always activate environment first:
+  source venv/bin/activate
+
+Then run your choice:
+
+Option 1: Full Analysis (recommended)
+  python3 analyze_titanic.py
+  
+Option 2: Simple Charts
+  python3 tplot_examples.py
+  
+Option 3: Library Comparison
+  python3 comparison.py
+
+Run all three in sequence:
+  python3 analyze_titanic.py && python3 tplot_examples.py && python3 comparison.py
+
+================================================================================
+PROJECT STATISTICS
+================================================================================
+
+Code:
+  • 3 main scripts (4-8 KB each)
+  • ~1,000+ lines of code
+  • Well-commented and documented
+
+Data:
+  • Titanic dataset: 891 passengers
+  • 12 columns of information
+  • 61 KB CSV file
+
+Documentation:
+  • 4 text guides (8-12 KB each)
+  • README with full details
+  • Examples and explanations
+
+Library Support:
+  • 5 Python packages installed
+  • Virtual environment isolated
+  • All dependencies included
+
+Performance:
+  • Scripts run in 2-5 seconds
+  • Data fits in memory
+  • No external API calls
+
+================================================================================
+CUSTOMIZATION TIPS
+================================================================================
+
+Want to modify the scripts?
+
+Edit chart parameters:
+  Line 70 in analyze_titanic.py:
+  print(asciichartpy.plot(values, {'height': 10, 'width': 50}))
+  
+  Change height: 10 → 20 (taller chart)
+  Change width: 50 → 100 (wider chart)
+
+Add new analysis:
+  Add this after existing analysis:
+  avg_age_by_class = df.groupby('Pclass')['Age'].mean()
+  print(avg_age_by_class)
+
+Filter different data:
+  df_young = df[df['Age'] < 18]
+  young_survival = df_young['Survived'].mean()
+
+Create new CSV:
+  df.groupby('Sex')['Survived'].sum().to_csv('gender_summary.csv')
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Problem: "ModuleNotFoundError: No module named 'pandas'"
+Solution: Activate environment: source venv/bin/activate
+
+Problem: Charts are misaligned
+Solution: Make terminal wider (at least 80 chars)
+
+Problem: Can't download data
+Solution: Run again (temporary network issue), or use existing CSV
+
+Problem: "python3: command not found"
+Solution: Install Python 3.8+, or use "python" instead
+
+Problem: Venv doesn't work
+Solution: Run: python3 -m venv venv
+         Then: source venv/bin/activate
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+After running the scripts:
+
+1. Read the documentation:
+   • Read QUICKSTART.txt for detailed setup
+   • Read README.md for full documentation
+   • Read SUMMARY.txt for project overview
+
+2. Experiment:
+   • Modify the Python scripts
+   • Try different chart parameters
+   • Analyze different aspects of data
+
+3. Use your own data:
+   • Replace titanic.csv with your data
+   • Modify the scripts for your columns
+   • Create charts for your dataset
+
+4. Build tools:
+   • Create monitoring dashboards
+   • Build data analysis tools
+   • Develop terminal applications
+
+5. Learn more:
+   • Pandas: https://pandas.pydata.org/
+   • Plotext: https://github.com/piccolomo/plotext
+   • Terminal UIs: Rich, Blessed libraries
+
+================================================================================
+DIRECTORY STRUCTURE
+================================================================================
+
+/root/hermes/wrk/textchart/
+├── analyze_titanic.py      ← Main analysis script
+├── comparison.py           ← Library comparison
+├── tplot_examples.py       ← Tplot examples
+├── titanic.csv             ← Dataset (892 rows)
+├── INDEX.txt               ← This file
+├── QUICKSTART.txt          ← Quick start guide
+├── SUMMARY.txt             ← Project summary
+├── README.md               ← Full documentation
+├── venv/                   ← Python environment
+│   ├── bin/
+│   │   ├── python
+│   │   ├── pip
+│   │   └── activate
+│   └── lib/
+│       └── python3.13/
+│           └── site-packages/
+
+================================================================================
+SYSTEM INFORMATION
+================================================================================
+
+Environment: WSL (Windows Subsystem for Linux)
+Python: 3.13
+Venv: /root/hermes/wrk/textchart/venv/
+
+Installed Packages:
+  • pandas 2.x          - Data manipulation
+  • requests            - HTTP downloads
+  • asciichartpy        - ASCII charts
+  • plotext             - Terminal plotting
+  • tplot               - (built-in)
+
+Terminal Requirements:
+  • UTF-8 encoding
+  • 80+ character width
+  • Unix/Linux shell
+
+================================================================================
+GETTING HELP
+================================================================================
+
+For questions about:
+  • Setup:       Read QUICKSTART.txt
+  • Details:     Read README.md
+  • Running:     See section above
+  • Data:        Check SUMMARY.txt
+
+Library Documentation:
+  • Pandas:      https://pandas.pydata.org/docs/
+  • Asciichartpy: https://github.com/pawamoy/python-asciichartpy
+  • Plotext:     https://github.com/piccolomo/plotext
+
+================================================================================
+YOU'RE READY!
+================================================================================
+
+Next steps:
+
+1. Read QUICKSTART.txt
+2. Run: cd /root/hermes/wrk/textchart
+3. Run: source venv/bin/activate
+4. Run: python3 analyze_titanic.py
+
+Enjoy exploring data in the terminal!
+
+================================================================================

@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# pi-agent container image
+# Build:  podman build -t pi-agent:v1 -f Containerfile .
+# Run:    podman run --rm -it -e OPENAI_API_KEY=mykey pi-agent:v1
+# pi :    --help, --list-models ...
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM registry.redhat.io/ubi9/nodejs-20-minimal
+
+# ── 1. Install system dependencies ───────────────────────────────────────────
+# mode and the cache is not committed into the image layer.
+USER root
+RUN microdnf install -y gzip && \
+    microdnf clean all
+
+RUN curl -L -o /tmp/rg.tar.gz \
+    https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep-14.1.0-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/rg.tar.gz -C /tmp \
+ && cp /tmp/ripgrep-14.1.0-x86_64-unknown-linux-musl/rg /usr/local/bin/rg \
+ && chmod +x /usr/local/bin/rg \
+ && rm -rf /tmp/rg*
+
+RUN curl -L -o /tmp/fd.tar.gz \
+    https://github.com/sharkdp/fd/releases/download/v10.2.0/fd-v10.2.0-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/fd.tar.gz -C /tmp \
+ && cp /tmp/fd-v10.2.0-x86_64-unknown-linux-musl/fd /usr/local/bin/fd \
+ && chmod +x /usr/local/bin/fd \
+ && rm -rf /tmp/fd*
+
+# Switch to non-root user
+USER 1001
+
+# Create working folders
+
+# WORKDIR /home/user
+WORKDIR /opt/app-root/src
+# RUN mkdir -p /home/user/agent /home/user/inbox /home/user/outbox \
+#     && chown -R 1001:1001 /home/user && chmod 777 /home/user/outbox
+RUN mkdir agent inbox outbox && chmod 777 outbox
+
+# ── 2. Install pi.dev agent packages ─────────────────────────────────────────
+RUN npm install -g @earendil-works/pi-coding-agent && \
+    npm cache clean --force
+
+# ── 3. Environment ────────────────────────────────────────────────────────────
+ENV PATH="/root/.local/bin:$PATH"
+
+# ── 4. Default cmd. Use entrypoint for production. ────────────────────────────
+CMD ["pi", "-p", "Your home folder /opt/app-root/src have 3 sub-folders: agent, inbox and outbox.  For instructions, please read the .md files in the agent folder. Process all files in the inbox folder. Output all results and activity logs in the outbox folder."]
+
+#

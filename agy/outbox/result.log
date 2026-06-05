@@ -1,0 +1,12 @@
+[
+  {
+    "file": "playbook-w-vul-1.yaml",
+    "result": "Fail",
+    "reason": "Hardcoded credentials found in variable definitions. Command injection risk detected due to unsafe use of shell with unvalidated input. Insecure file permissions for private key."
+  },
+  {
+    "file": "playbook-wo-vul-1.yaml",
+    "result": "Pass",
+    "reason": ""
+  }
+]

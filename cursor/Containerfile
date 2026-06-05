@@ -1,0 +1,23 @@
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+# Install runtime dependencies required by the Cursor CLI installer.
+RUN microdnf update -y \
+    && microdnf install -y tar gzip \
+    && microdnf clean all
+
+ENV HOME=/root
+ENV PATH=/root/.local/bin:/root/bin:${PATH}
+
+# Install Cursor Agent CLI (as documented in Read.me).
+RUN curl https://cursor.com/install -fsS | bash \
+    && agent about
+
+RUN mkdir -p /workspace/input /workspace/output
+WORKDIR /workspace
+
+# API key placeholders (pass real values at runtime with podman -e).
+ENV OPENROUTER_API_KEY=""
+ENV ANTHROPIC_API_KEY=""
+
+# Use CMD (not ENTRYPOINT) so podman run ... /bin/bash overrides easily.
+CMD ["agent"]

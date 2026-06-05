@@ -1,0 +1,36 @@
+# FROM registry.access.redhat.com/ubi9/python-39:1-1743091356
+FROM registry.redhat.io/rhel9/python-314-minimal
+
+USER root
+RUN microdnf install -y --nodocs tar gzip git xz && microdnf clean all
+
+# Manual install rg and fd commands used by pi ... unable to install using microdnf
+# sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+# sudo dnf install -y ripgrep
+
+RUN curl -L -o /tmp/rg.tar.gz \
+    https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep-14.1.0-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/rg.tar.gz -C /tmp \
+ && cp /tmp/ripgrep-14.1.0-x86_64-unknown-linux-musl/rg /usr/local/bin/rg \
+ && chmod +x /usr/local/bin/rg \
+ && rm -rf /tmp/rg*
+
+RUN curl -L -o /tmp/fd.tar.gz \
+    https://github.com/sharkdp/fd/releases/download/v10.2.0/fd-v10.2.0-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/fd.tar.gz -C /tmp \
+ && cp /tmp/fd-v10.2.0-x86_64-unknown-linux-musl/fd /usr/local/bin/fd \
+ && chmod +x /usr/local/bin/fd \
+ && rm -rf /tmp/fd*
+
+
+# Download and run the Hermes CLI installation script
+USER 1001
+
+RUN curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+
+# Ensure common installation directories are in the PATH 
+# (in case the installer places 'hermes' in a local user bin directory)
+ENV PATH="/root/.local/bin:/usr/local/bin:${PATH}"
+
+# Start in shell: podman run -it --rm <image> /bin/bash
+CMD ["hermes"]

@@ -1,0 +1,6 @@
+Processed /root/codex/inbox/playbook-w-vul-1.yaml
+Findings:
+- shell command interpolates user_input directly
+- db_password is hardcoded in vars
+- private key file is copied with mode 0644
+Status: Fail

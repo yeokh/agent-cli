@@ -1,0 +1,7 @@
+# Ignore hidden dotfiles and dotfolders anywhere in the tree
+**/.*
+!/.gitignore
+
+# Ignore requested folder or file
+devworks
+devworks/

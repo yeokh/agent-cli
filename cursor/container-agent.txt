@@ -1,0 +1,32 @@
+cursor agent - Codex 5.3 Medium 
+
+Please review Read.me to see how Cursor agent CLI is installed, then generate a Containerfile with
+  the appropriate Red Hat Minimal UBI as the base image so that I can build a container image with
+  the Cursor agent CLI pre-installed and ready for use in a container by using Podman run. Include environment
+  variables for API keys such as OPENROUTER_API_KEY and ANTHROPIC_API_KEY and volume mount for input and output
+  folders. Use CMD instead of ENTRYPOINT for easy override of Podman run with /bin/bash.
+
+Created Containerfile at /root/cursor/Containerfile based on Red Hat UBI minimal, using the exact install method
+  from Read.me:
+
+  • Uses registry.access.redhat.com/ubi9/ubi-minimal:latest
+  • Installs required packages (bash, curl, certs, etc.)
+  • Runs curl https://cursor.com/install -fsS | bash to preinstall Cursor agent CLI
+  • Sets placeholders for OPENROUTER_API_KEY and ANTHROPIC_API_KEY
+  • Declares VOLUME mount points at /workspace/input and /workspace/output
+  • Uses CMD ["agent", "--help"] (no ENTRYPOINT) so override is easy
+
+  Quick usage:
+
+  podman build -t cursor-agent-cli -f Containerfile .
+
+  podman run --rm -it \
+    -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
+    -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+    -v "$(pwd)/input:/workspace/input:Z" \
+    -v "$(pwd)/output:/workspace/output:Z" \
+    cursor-agent-cli
+
+  Override to shell:
+
+  podman run --rm -it cursor-agent-cli /bin/bash

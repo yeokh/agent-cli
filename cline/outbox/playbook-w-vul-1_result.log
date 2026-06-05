@@ -1,0 +1,4 @@
+{
+  "result": "Fail",
+  "reason": "Command injection risk detected due to unsafe use of shell with unvalidated input. Hardcoded credentials found in variable definitions and inline shell command. Insecure file permissions used for private key."
+}

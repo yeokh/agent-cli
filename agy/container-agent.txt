@@ -1,0 +1,23 @@
+agy - /model - Gemini 3.1 Pro (High)
+
+Please review Read.me to see how Antigravity CLI is installed, then generate a Containerfile with
+the appropriate Red Hat UBI as the base image so that I can build a container image with
+the Antigravity CLI pre-installed and ready for use in a container by using Podman run.
+
+I have reviewed the  Read.me  file and generated a Containerfile that uses the latest Red Hat UBI 9 base image.
+
+  It installs the necessary dependencies ( curl  and  bash ), downloads and executes the  install.sh  script for the
+  Antigravity CLI, and sets up  agy  as the default entrypoint so the container behaves just like the CLI executable
+  itself.
+
+  You can now build and run this container image with  podman  using the following commands:
+
+  To build the image:
+
+    podman build -t antigravity-cli .
+
+  To run the CLI via the container:
+
+    podman run --rm -it antigravity-cli --help
+
+  (Any arguments you append to the  podman run  command will be passed directly to the  agy  CLI).

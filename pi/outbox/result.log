@@ -1,0 +1,22 @@
+[
+  {
+    "file": "inbox/playbook-w-vul-2.yaml",
+    "result": "Fail",
+    "reason": "Hardcoded credentials and unsafe command execution detected. Insecure file permissions were also found."
+  },
+  {
+    "file": "inbox/playbook-w-vul-1.yaml",
+    "result": "Fail",
+    "reason": "Detected hardcoded credentials, a potential command injection risk, and insecure private key permissions."
+  },
+  {
+    "file": "inbox/playbook-wo-vul-1.yaml",
+    "result": "Pass",
+    "reason": ""
+  }
+]
+
+Activity Log:
+- Processed 3 playbook files from the inbox folder.
+- Analyzed each playbook for command injection, exposed credentials, and insecure practices.
+- Results written to outbox/result.log.

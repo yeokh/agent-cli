@@ -1,0 +1,6 @@
+Processed /root/codex/inbox/playbook-wo-vul-1.yaml
+Findings:
+- secrets are referenced via vars_files/vault variables
+- no unsafe shell, command, or raw usage detected
+- private key is copied with restrictive mode 0600
+Status: Pass

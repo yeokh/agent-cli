@@ -1,0 +1,16 @@
+# FROM registry.access.redhat.com/ubi9/python-39:1-1743091356
+FROM registry.redhat.io/rhel9/python-314-minimal
+
+USER root
+RUN microdnf install -y --nodocs tar gzip && microdnf clean all
+USER 1001
+
+# Download and run the Antigravity CLI installation script
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
+
+# Ensure common installation directories are in the PATH 
+# (in case the installer places 'agy' in a local user bin directory)
+ENV PATH="/root/.local/bin:/usr/local/bin:${PATH}"
+
+# Start in shell: podman run -it --rm <image> /bin/bash
+CMD ["agy"]

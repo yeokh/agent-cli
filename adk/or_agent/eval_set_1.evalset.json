@@ -1,0 +1,59 @@
+{
+  "eval_set_id": "eval_set_1",
+  "name": "eval_set_1",
+  "eval_cases": [
+    {
+      "eval_id": "hi",
+      "conversation": [
+        {
+          "invocation_id": "e-253c50bf-ba09-4bbe-81d0-7ca32638b589",
+          "user_content": {
+            "parts": [
+              {
+                "text": "hi"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Hi! How can I help you today?"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {},
+          "creation_timestamp": 1780208249.9859357
+        },
+        {
+          "invocation_id": "e-3a03e909-af1c-4086-b516-01cc0f5de3e9",
+          "user_content": {
+            "parts": [
+              {
+                "text": "what model am I using now"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I don’t have access to the exact model name you’re using."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {},
+          "creation_timestamp": 1780208263.5468326
+        }
+      ],
+      "session_input": {
+        "app_name": "openrouter_agent",
+        "user_id": "user"
+      },
+      "creation_timestamp": 1780208319.6441042
+    }
+  ],
+  "creation_timestamp": 1780208307.8175144
+}

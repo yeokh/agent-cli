@@ -1,0 +1,5 @@
+{
+  "file": "playbook-w-vul-1.yaml",
+  "result": "Fail",
+  "reason": "Multiple vulnerabilities detected: (1) Hardcoded credential — 'db_password: SuperSecret123' is stored as plaintext in vars, exposing the secret in version control. (2) Command injection risk — the shell module executes 'rm -rf /home/{{ user_input }}' where user_input is sourced from an environment variable without any sanitization, allowing arbitrary path deletion. (3) Credentials exposed in command arguments — the command module passes the plaintext db_password directly on the MySQL command line, leaking it to process listings. (4) Insecure file permissions — the private key id_rsa is copied with mode '0644', making it world-readable instead of the required '0600' or stricter."
+}

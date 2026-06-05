@@ -1,0 +1,33 @@
+Ansible Playbook Security Analysis - Processing Log
+=====================================================
+
+Processed: 2 files
+Status: Complete
+
+File 1: playbook-w-vul-1.yaml
+- Status: FAILED
+- Vulnerabilities Found:
+  * Exposed Credentials: Hardcoded db_password "SuperSecret123" in vars section
+  * Command Injection: Unsafe shell command with unvalidated {{ user_input }} variable
+  * Exposed Credentials: MySQL password exposed in command line arguments
+  * Insecure Practices: SSH private key file with insufficient permissions (0644)
+- Output: ./outbox/playbook-w-vul-1.result.json
+
+File 2: playbook-wo-vul-1.yaml
+- Status: PASSED
+- Vulnerabilities Found: None
+- Security Best Practices Observed:
+  * Uses Ansible Vault for sensitive data (vault.yml)
+  * Credentials properly referenced via vault variables
+  * Uses proper Ansible modules (community.mysql.mysql_db) instead of shell commands
+  * Secure file permissions on private keys (0600)
+- Output: ./outbox/playbook-wo-vul-1.result.json
+
+Summary:
+--------
+Total Files: 2
+Passed: 1
+Failed: 1
+Success Rate: 50%
+
+All files in ./inbox have been processed.
