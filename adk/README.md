@@ -6,8 +6,8 @@ Google Agent Development Kit (ADK)
 # uv sync
 # source .venv/bin/activate
 
-# uv pip install google-adk
-# uv pip install google-adk[extensions]
+# uv add google-adk
+# uv add google-adk[extensions]
 
 # adk create ant_agent   >> Folder name cannot have dash
 # ls ant_agent; vi ./ant_agent/agent.py 
@@ -19,7 +19,7 @@ Note: Expected adk agent directory structure:
       root_agent.yaml
 
 # adk run ant_agent
-# adk web ant_agent
+# adk web 
 
 ant_agent >> Anthropic
 or_agent >> OpenRouter, Ollama or equivalent

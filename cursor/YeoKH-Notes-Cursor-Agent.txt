@@ -1,0 +1,18 @@
+agent --continue -p --output-format stream-json --stream-partial-output "Continue where we left off..."
+agent --mode=ask -p "How does the auth module work?"
+agent --mode=ask -p --resume=-1 "Will using cursor agent --continue option get faster response..."
+agent --help
+
+Docs: 
+CLI Parameters](https://cursor.com/docs/cli/reference/parameters)
+Using Agent in CLI](https://cursor.com/docs/cli/using)
+
+## What actually affects speed more
+
+- Shorter, clearer prompts
+- Smaller context (fewer/larger `@` files)
+- Faster model via `--model ...`
+- Ask mode when you only need Q&A (avoids edit/shell tool loops)
+
+
+
