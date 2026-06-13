@@ -1,0 +1,17 @@
+Quarterly Server Inventory — Region: EMEA
+==========================================
+
+hostname        os              role            status
+--------        --              ----            ------
+web-fr-01       RHEL 9.4        web frontend    healthy
+web-fr-02       RHEL 9.4        web frontend    healthy
+app-de-01       RHEL 8.10       app server      degraded (high memory)
+app-de-02       RHEL 8.10       app server      healthy
+db-nl-01        RHEL 9.4        database        healthy
+db-nl-02        RHEL 9.4        database        maintenance
+cache-uk-01     Fedora 41       cache           healthy
+
+Notes:
+- app-de-01 has shown memory pressure since 2026-05-28; restart scheduled.
+- db-nl-02 is in planned maintenance until 2026-06-15.
+- cache-uk-01 is a pilot host and not covered by the standard SLA.

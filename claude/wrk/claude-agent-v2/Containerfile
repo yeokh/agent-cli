@@ -1,0 +1,31 @@
+# Claude Agent Harness — headless container (no web UI).
+# Runs agent_harness.py once against the mounted agent/input/output volumes.
+FROM registry.access.redhat.com/ubi9/python-312
+
+USER root
+RUN microdnf update -y && microdnf clean all
+
+WORKDIR /app
+RUN chown 1001:0 /app && chmod g=u /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY agent_harness.py .
+
+RUN mkdir -p /app/agent /app/input /app/output \
+    && chown -R 1001:0 /app/agent /app/input /app/output \
+    && chmod -R g=u /app/agent /app/input /app/output
+
+VOLUME ["/app/agent", "/app/input", "/app/output"]
+
+ENV MODEL="claude-opus-4-5" \
+    MAX_TURNS="50" \
+    AGENT_DIR="/app/agent" \
+    INPUT_DIR="/app/input" \
+    OUTPUT_DIR="/app/output"
+
+USER 1001
+
+# No EXPOSE — no web server
+CMD ["python", "/app/agent_harness.py"]
