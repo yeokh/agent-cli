@@ -2,6 +2,40 @@
 **/.*
 !/.gitignore
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Package management
+uv.lock
+*.lock
+poetry.lock
+Pipfile.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build and distribution
+build/
+dist/
+*.egg-info/
+
 # Ignore requested folder or file
 devworks
 devworks/
