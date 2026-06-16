@@ -107,7 +107,7 @@ def curl_web(url: str) -> str:
 ### Configure the model wrapper ###
 # Notice the "openrouter/" prefix required for LiteLLM routing
 openrouter_model = LiteLlm(
-    model="openrouter/openai/gpt-5.4-nano",
+    model="openrouter/anthropic/claude-3-5-haiku",
     api_key=openrouter_api_key
 )
 

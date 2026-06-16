@@ -44,7 +44,7 @@ The registered system name is: rhel9wsl
 # dnf remove -y command-line-assistant rhc
 
 Install:
-- mc, nano
+- mc, nano, git, gh
 - uv -V, uv self update
 - python3 --version
 - podman version
@@ -101,20 +101,6 @@ curl -fsSL https://pi.dev/install.sh | sh
 # export ANTHROPIC_API_KEY=<redacted-anthropic-api-key>
 # pi
 /login
-
-
-======
-Gemini
-======
-https://docs.google.com/document/d/1-c4QBDuT9STwqU-Txb7C86VgHggeD8p4Lum1gnNHSxI/
-https://geminicli.com/docs/get-started/installation/
-
-# export GOOGLE_CLOUD_PROJECT="agentspace-301617"
-# echo 'export GOOGLE_CLOUD_PROJECT="agentspace-301617"' >> ~/.bashrc
-# source ~/.bashrc
-
-# gemini
-/about
 
 
 ========

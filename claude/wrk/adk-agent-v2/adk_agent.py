@@ -35,6 +35,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -325,6 +326,25 @@ def load_skills(agent_dir: Path) -> tuple[list, list[str]]:
 
 
 # --- Agent Folder Loading -----------------------------------------------------
+#
+# Google ADK inject_session_state() treats {identifier} in the system prompt as
+# session-state placeholders. Skill docs often contain Python f-strings like
+# {table_selector}; escape those so they pass through unchanged.
+
+_ADK_STATE_VAR = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _escape_adk_instruction_vars(text: str) -> str:
+    """Prevent ADK from treating {name} literals in markdown as session state."""
+
+    def repl(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name.isidentifier():
+            return "{" + name + "\u200b}"
+        return match.group(0)
+
+    return _ADK_STATE_VAR.sub(repl, text)
+
 
 def load_agent_folder(agent_dir: Path) -> tuple[str, str]:
     """Return (instruction_text, skills_block) from the agent/ folder.
@@ -335,13 +355,16 @@ def load_agent_folder(agent_dir: Path) -> tuple[str, str]:
     instruction_file = agent_dir / "instruction.md"
     if not instruction_file.is_file():
         raise FileNotFoundError(f"instruction.md not found in {agent_dir}")
-    instruction = instruction_file.read_text(encoding="utf-8")
+    instruction = _escape_adk_instruction_vars(
+        instruction_file.read_text(encoding="utf-8")
+    )
 
     sections = []
     for md in sorted(agent_dir.glob("*.md")):
         if md.name == "instruction.md":
             continue
-        sections.append(f"### {md.name}\n\n{md.read_text(encoding='utf-8')}")
+        body = _escape_adk_instruction_vars(md.read_text(encoding="utf-8"))
+        sections.append(f"### {md.name}\n\n{body}")
     skills_block = "\n\n".join(sections)
     return instruction, skills_block
 
