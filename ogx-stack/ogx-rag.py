@@ -1,6 +1,8 @@
 from openai import OpenAI
 
-client = OpenAI(base_url="http://172.29.64.178:8321/v1", api_key="fake")
+client = OpenAI(base_url="http://127.0.0.1:8321/v1", api_key="fake")
+
+print("Ingest README.md into vector store and ask question with file_search tool")
 
 # Upload a document
 file = client.files.create(
@@ -16,7 +18,7 @@ vector_store = client.vector_stores.create(
 
 # Ask questions with file search
 response = client.responses.create(
-    model="anthropic/claude-haiku-4-5-20251001",
+    model="openai/anthropic/claude-haiku-4.5",
     input="How to start ogx?",
     tools=[{
         "type": "file_search",

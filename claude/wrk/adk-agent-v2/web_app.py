@@ -56,8 +56,10 @@ for d in (AGENT_DIR, INPUT_DIR, OUTPUT_DIR):
 FOLDERS = {"agent": AGENT_DIR, "input": INPUT_DIR, "output": OUTPUT_DIR}
 EDITABLE_FOLDERS = ("agent", "input")
 
-JOB_HISTORY_FILE = OUTPUT_DIR / ".job_history.json"
-JOB_HISTORY_MAX = 20
+PROJECT_ROOT = Path(__file__).resolve().parent
+README_FILE = PROJECT_ROOT / "README.md"
+JOB_HISTORY_FILE = PROJECT_ROOT / ".job_history.json"
+JOB_HISTORY_MAX = 100
 HIDDEN_FILES = {".job_history.json", ".gitkeep"}
 
 KEY_ENV_VARS = {
@@ -162,6 +164,53 @@ def _count_output_files() -> int:
 
 # --- Job History --------------------------------------------------------------
 
+def _load_job_history() -> list:
+    try:
+        if JOB_HISTORY_FILE.is_file():
+            data = json.loads(JOB_HISTORY_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return data
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("Could not read job history: %s", exc)
+    return []
+
+
+def _save_job_history(history: list) -> None:
+    try:
+        JOB_HISTORY_FILE.write_text(
+            json.dumps(history[-JOB_HISTORY_MAX:], indent=2),
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        log.warning("Could not write job history: %s", exc)
+
+
+def _migrate_job_history() -> None:
+    """Merge legacy output/.job_history.json into the project-root store."""
+    old_file = OUTPUT_DIR / ".job_history.json"
+    if not old_file.is_file():
+        return
+    try:
+        old_data = json.loads(old_file.read_text(encoding="utf-8"))
+        if not isinstance(old_data, list):
+            return
+        history = _load_job_history()
+        seen = {entry.get("run_id") for entry in history if entry.get("run_id")}
+        for entry in old_data:
+            run_id = entry.get("run_id")
+            if run_id and run_id in seen:
+                continue
+            history.append(entry)
+            if run_id:
+                seen.add(run_id)
+        _save_job_history(history)
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("Could not migrate job history: %s", exc)
+
+
+_migrate_job_history()
+
+
 def _append_job_history(snap: dict) -> None:
     """Append one run record to output/.job_history.json (cap at 20 entries)."""
     metrics = snap.get("metrics") or {}
@@ -178,20 +227,9 @@ def _append_job_history(snap: dict) -> None:
         "log_lines": metrics.get("log_lines"),
         "output_files": metrics.get("output_files"),
     }
-    history: list = []
-    try:
-        if JOB_HISTORY_FILE.exists():
-            history = json.loads(JOB_HISTORY_FILE.read_text(encoding="utf-8"))
-            if not isinstance(history, list):
-                history = []
-    except (json.JSONDecodeError, OSError):
-        history = []
+    history = _load_job_history()
     history.append(entry)
-    history = history[-JOB_HISTORY_MAX:]
-    try:
-        JOB_HISTORY_FILE.write_text(json.dumps(history, indent=2), encoding="utf-8")
-    except OSError as exc:
-        log.warning("Could not write job history: %s", exc)
+    _save_job_history(history)
 
 
 # --- Agent Thread -------------------------------------------------------------
@@ -274,6 +312,18 @@ def _folder_or_404(folder: str, editable_only: bool = False):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/readme", methods=["GET"])
+def api_readme():
+    if not README_FILE.is_file():
+        return jsonify({"found": False})
+    content = README_FILE.read_text(encoding="utf-8", errors="replace")
+    return jsonify({
+        "found": True,
+        "content": content,
+        "size": README_FILE.stat().st_size,
+    })
 
 
 # --- Routes: File Browser & Editor --------------------------------------------
@@ -361,6 +411,8 @@ def api_delete_file(folder, filename):
 def api_clear_folder(folder):
     base = FOLDERS[folder]
     for item in base.iterdir():
+        if item.name in HIDDEN_FILES:
+            continue
         if item.is_file():
             item.unlink()
         elif item.is_dir():
@@ -518,6 +570,7 @@ def api_set_key():
 def api_get_settings():
     return jsonify({
         "max_turns": int(os.environ.get("MAX_TURNS", "50") or 50),
+        "max_output_tokens": int(os.environ.get("MAX_OUTPUT_TOKENS", str(adk_agent.DEFAULT_MAX_OUTPUT_TOKENS)) or adk_agent.DEFAULT_MAX_OUTPUT_TOKENS),
         "allow_shell": os.environ.get("ALLOW_SHELL", "true").lower() not in ("0", "false", "no", "off"),
         "shell_timeout": int(os.environ.get("SHELL_TIMEOUT", "60") or 60),
         "openai_base_url": os.environ.get("OPENAI_BASE_URL", "http://localhost:11434/v1"),
@@ -532,6 +585,11 @@ def api_set_settings():
             os.environ["MAX_TURNS"] = str(max(1, int(data["max_turns"])))
         except (TypeError, ValueError):
             return jsonify({"error": "max_turns must be an integer"}), 400
+    if "max_output_tokens" in data:
+        try:
+            os.environ["MAX_OUTPUT_TOKENS"] = str(max(1024, int(data["max_output_tokens"])))
+        except (TypeError, ValueError):
+            return jsonify({"error": "max_output_tokens must be an integer"}), 400
     if "allow_shell" in data:
         os.environ["ALLOW_SHELL"] = "true" if data["allow_shell"] else "false"
     if "shell_timeout" in data:
@@ -550,14 +608,7 @@ def api_set_settings():
 
 @app.route("/api/jobs", methods=["GET"])
 def api_jobs():
-    try:
-        if JOB_HISTORY_FILE.exists():
-            jobs = json.loads(JOB_HISTORY_FILE.read_text(encoding="utf-8"))
-        else:
-            jobs = []
-    except (json.JSONDecodeError, OSError):
-        jobs = []
-    return jsonify({"jobs": jobs})
+    return jsonify({"jobs": _load_job_history()})
 
 
 # --- Routes: Agent Control ----------------------------------------------------

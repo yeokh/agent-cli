@@ -15,7 +15,7 @@ Architecture
 ------------
   web_app.py / __main__  ->  run_agent()
                                 |  _build_model()  ->  LiteLlm instance
-                                |  _make_tools()   ->  ADK tool functions
+                                |  _make_tools()   ->  ADK tool functions (incl. web_fetch)
                                 v
                           LlmAgent + InMemoryRunner
                                 |
@@ -41,12 +41,18 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
+
+import httpx
 
 log = logging.getLogger("adk_agent")
 
 PROVIDERS = ("anthropic", "openrouter", "openai-compatible")
 
 DEFAULT_MODEL = "claude-opus-4-5"
+DEFAULT_MAX_OUTPUT_TOKENS = 16384
+WEB_FETCH_MAX_BYTES = 512_000
+WEB_FETCH_DEFAULT_TIMEOUT = 30
 
 
 # --- Environment Helpers ------------------------------------------------------
@@ -107,12 +113,21 @@ def _list_files(base: Path, exclude: set[str] | None = None) -> list[str]:
 #   - type annotations    -> parameter schema
 #   - return type str     -> the result returned to the LLM
 #
-# All six tools are defined as closures inside _make_tools() so they capture
+# All tools are defined as closures inside _make_tools() so they capture
 # the resolved input_dir and output_dir paths at construction time.  Path-
 # traversal checks are applied on every call.
 
+def _validate_fetch_url(url: str) -> str:
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("URL must use http:// or https://")
+    if not parsed.netloc:
+        raise ValueError("URL must include a host")
+    return url.strip()
+
+
 def _make_tools(input_dir: Path, output_dir: Path) -> list:
-    """Return the six scoped tool functions bound to input_dir and output_dir."""
+    """Return the scoped tool functions bound to input_dir and output_dir."""
     input_r = input_dir.resolve()
     output_r = output_dir.resolve()
 
@@ -227,8 +242,69 @@ def _make_tools(input_dir: Path, output_dir: Path) -> list:
             log.info("[tool] run_command timed out after %ds: %s", effective_timeout, command)
             return json.dumps({"stdout": "", "stderr": "Command timed out", "returncode": -1})
 
+    def web_fetch(url: str, timeout: int = WEB_FETCH_DEFAULT_TIMEOUT) -> str:
+        """Fetch a URL over HTTP/HTTPS and return the response body as text.
+
+        Use this to retrieve web pages or JSON API responses (e.g. Red Hat
+        CVE data at https://access.redhat.com/security/cve/<CVE-ID> or the
+        Hydra JSON API).  Redirects are followed automatically.
+
+        Args:
+            url: Absolute http:// or https:// URL to fetch.
+            timeout: Request timeout in seconds (default 30, max 60).
+
+        Returns:
+            JSON with url, status_code, content_type, truncated, and text fields.
+        """
+        try:
+            fetch_url = _validate_fetch_url(url)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+        effective_timeout = min(max(int(timeout), 1), 60)
+        try:
+            with httpx.Client(
+                follow_redirects=True,
+                timeout=effective_timeout,
+                headers={"User-Agent": "adk-agent-harness/1.0"},
+            ) as client:
+                with client.stream("GET", fetch_url) as resp:
+                    chunks: list[bytes] = []
+                    size = 0
+                    truncated = False
+                    for chunk in resp.iter_bytes():
+                        if size + len(chunk) > WEB_FETCH_MAX_BYTES:
+                            remaining = WEB_FETCH_MAX_BYTES - size
+                            if remaining > 0:
+                                chunks.append(chunk[:remaining])
+                            truncated = True
+                            break
+                        chunks.append(chunk)
+                        size += len(chunk)
+                    body = b"".join(chunks)
+                    content_type = resp.headers.get("content-type", "")
+                    if "application/json" in content_type or body.startswith(b"{") or body.startswith(b"["):
+                        text = body.decode("utf-8", errors="replace")
+                    elif "text/" in content_type or "html" in content_type or "xml" in content_type:
+                        text = body.decode("utf-8", errors="replace")
+                    else:
+                        text = body.decode("utf-8", errors="replace")
+                    log.info("[tool] web_fetch(%s) -> %d", fetch_url, resp.status_code)
+                    return json.dumps({
+                        "url": str(resp.url),
+                        "status_code": resp.status_code,
+                        "content_type": content_type,
+                        "truncated": truncated,
+                        "text": text,
+                    })
+        except httpx.TimeoutException:
+            log.info("[tool] web_fetch timed out after %ds: %s", effective_timeout, url)
+            return json.dumps({"error": f"Request timed out after {effective_timeout}s"})
+        except httpx.HTTPError as exc:
+            log.info("[tool] web_fetch failed: %s", exc)
+            return json.dumps({"error": str(exc)})
+
     return [list_input_files, read_input_file, write_output, append_output,
-            list_output_files, run_command]
+            list_output_files, run_command, web_fetch]
 
 
 # ==============================================================================
@@ -406,7 +482,13 @@ def build_system_prompt(
         "  - append_output     -- append to a file in the output folder\n"
         "  - list_output_files -- list files already written to the output folder\n"
         "  - run_command       -- execute a shell command; returns stdout, stderr, returncode\n"
+        "  - web_fetch         -- fetch an http(s) URL; returns status, content_type, and text\n"
         f"{custom_lines}"
+        "\n"
+        "Large file guidance:\n"
+        "  - Keep each write_output call under ~8 KB of content.\n"
+        "  - For larger files, use append_output in several smaller chunks, or\n"
+        "    write via run_command (e.g. python3 -c or a heredoc).\n"
         "\n"
         f"{shell_block}"
     )
@@ -423,15 +505,24 @@ KICKOFF_PROMPT = "Begin executing the task instructions now."
 
 # --- Model Builder ------------------------------------------------------------
 
-def _build_model(provider: str, model_id: str):
+def max_output_tokens() -> int:
+    return _env_int("MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS)
+
+
+def _build_model(provider: str, model_id: str, *, output_token_limit: int):
     """Return a LiteLlm instance configured for the given provider and model.
 
     Routes each provider to its LiteLlm representation:
       anthropic         -> LiteLlm(model=model_id)           reads ANTHROPIC_API_KEY
       openrouter        -> LiteLlm(model=openrouter/...)     explicit api_base + key
       openai-compatible -> LiteLlm(model=openai/...)         OPENAI_BASE_URL + key
+
+    output_token_limit is passed as max_tokens to LiteLLM so tool-call JSON is not
+    truncated mid-string (a common cause of JSONDecodeError in ADK).
     """
     from google.adk.models.lite_llm import LiteLlm  # noqa: PLC0415
+
+    llm_kwargs = {"max_tokens": output_token_limit}
 
     if provider == "openrouter":
         api_key = _env("OPENROUTER_API_KEY")
@@ -442,6 +533,7 @@ def _build_model(provider: str, model_id: str):
             model=litellm_id,
             api_base="https://openrouter.ai/api/v1",
             api_key=api_key,
+            **llm_kwargs,
         )
 
     if provider == "openai-compatible":
@@ -452,12 +544,13 @@ def _build_model(provider: str, model_id: str):
             model=litellm_id,
             api_base=base_url,
             api_key=api_key,
+            **llm_kwargs,
         )
 
     # anthropic (default)
     if not _env("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
-    return LiteLlm(model=model_id)
+    return LiteLlm(model=model_id, **llm_kwargs)
 
 
 # --- ADK Event Formatter ------------------------------------------------------
@@ -548,6 +641,7 @@ async def run_agent(
     provider = _env("API_PROVIDER", "anthropic").lower()
     model_id = _env("MODEL", DEFAULT_MODEL)
     max_turns = _env_int("MAX_TURNS", 50)
+    output_token_limit = max_output_tokens()
 
     instruction, skills_block = load_agent_folder(agent_dir)
 
@@ -563,11 +657,12 @@ async def run_agent(
 
     emit(
         f"provider={provider}  model={model_id}  max_turns={max_turns}  "
+        f"max_output_tokens={output_token_limit}  "
         f"shell={'enabled' if allow_shell() else 'DISABLED'}"
     )
     emit(f"agent={agent_dir}  input={input_dir}  output={output_dir}")
 
-    model = _build_model(provider, model_id)
+    model = _build_model(provider, model_id, output_token_limit=output_token_limit)
     tools = _make_tools(input_dir, output_dir) + CUSTOM_TOOLS + skill_fns
 
     agent = LlmAgent(
@@ -575,6 +670,9 @@ async def run_agent(
         model=model,
         instruction=system_prompt,
         tools=tools,
+        generate_content_config=genai_types.GenerateContentConfig(
+            max_output_tokens=output_token_limit,
+        ),
     )
 
     runner = InMemoryRunner(agent=agent, app_name="adk_agent")
@@ -592,27 +690,35 @@ async def run_agent(
     tokens_in = 0
     tokens_out = 0
 
-    async for event in runner.run_async(
-        user_id="run_user",
-        session_id=session.id,
-        new_message=user_message,
-    ):
-        # Count model turns: each agent event that issues tool calls = 1 turn
-        content = getattr(event, "content", None)
-        author = getattr(event, "author", "")
-        if author and author != "user" and content:
-            parts = getattr(content, "parts", None) or []
-            if any(getattr(p, "function_call", None) for p in parts):
-                turns += 1
+    try:
+        async for event in runner.run_async(
+            user_id="run_user",
+            session_id=session.id,
+            new_message=user_message,
+        ):
+            # Count model turns: each agent event that issues tool calls = 1 turn
+            content = getattr(event, "content", None)
+            author = getattr(event, "author", "")
+            if author and author != "user" and content:
+                parts = getattr(content, "parts", None) or []
+                if any(getattr(p, "function_call", None) for p in parts):
+                    turns += 1
 
-        # Accumulate token usage from usage_metadata on model response events
-        usage = getattr(event, "usage_metadata", None)
-        if usage is not None:
-            tokens_in += getattr(usage, "prompt_token_count", 0) or 0
-            tokens_out += getattr(usage, "candidates_token_count", 0) or 0
+            # Accumulate token usage from usage_metadata on model response events
+            usage = getattr(event, "usage_metadata", None)
+            if usage is not None:
+                tokens_in += getattr(usage, "prompt_token_count", 0) or 0
+                tokens_out += getattr(usage, "candidates_token_count", 0) or 0
 
-        for line in _format_event(event):
-            emit(line)
+            for line in _format_event(event):
+                emit(line)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "The model returned malformed tool-call JSON (usually a truncated "
+            "write_output with large content). Increase MAX_OUTPUT_TOKENS "
+            f"(currently {output_token_limit}), use append_output for large "
+            f"files, or switch to a model with a higher output limit. ({exc})"
+        ) from exc
 
     emit(
         f"[result] turns={turns}  "

@@ -24,7 +24,7 @@ web_app.py ------- Flask REST API, file management, settings, SSE log stream
   v
 adk_agent.py ----- Google ADK core:
   |                  _build_model()  -> LiteLlm (Anthropic / OpenRouter / OpenAI-compat)
-  |                  _make_tools()   -> six scoped Python functions
+  |                  _make_tools()   -> seven scoped Python functions
   v
 LlmAgent + InMemoryRunner
   |  runner.run_async() yields Events
@@ -32,9 +32,23 @@ LlmAgent + InMemoryRunner
 _format_event() -> log lines -> SSE -> browser terminal
 ```
 
-The agent interacts with the world only through six scoped tools:
+The agent interacts with the world only through seven scoped tools:
 `list_input_files`, `read_input_file`, `write_output`, `append_output`,
-`list_output_files`, and `run_command` (shell, can be disabled).
+`list_output_files`, `run_command` (shell, can be disabled), and `web_fetch`.
+
+
+## Agent Tools
+
+The agent harness registers the following tools in _make_tools():
+
+    "Available tools:\n"
+    "  - list_input_files  -- list payload files in the input folder\n"
+    "  - read_input_file   -- read a file from the input folder\n"
+    "  - write_output      -- write a file to the output folder\n"
+    "  - append_output     -- append to a file in the output folder\n"
+    "  - list_output_files -- list files already written to the output folder\n"
+    "  - run_command       -- execute a shell command; returns stdout, stderr, returncode\n"
+    "  - web_fetch         -- fetch an http(s) URL; returns status, content_type, and text\n"
 
 ## Folder Model
 
