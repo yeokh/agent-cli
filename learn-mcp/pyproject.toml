@@ -1,9 +1,11 @@
 [project]
-name = "cursor"
+name = "learn-mcp"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "cursor-sdk>=0.1.7",
+    "anthropic>=0.111.0",
+    "fastmcp>=3.4.2",
+    "pydantic-ai>=1.107.0",
 ]
