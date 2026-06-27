@@ -152,6 +152,7 @@ class AgentState:
 
 state = AgentState()
 _cancel_event = threading.Event()
+_agent_thread_ref: threading.Thread | None = None
 
 
 def _count_output_files() -> int:
@@ -617,8 +618,19 @@ def api_jobs():
 
 @app.route("/api/agent/run", methods=["POST"])
 def api_run_agent():
+    global _agent_thread_ref
     if state.status == "running":
         return jsonify({"error": "Agent is already running"}), 409
+
+    # Wait briefly for the previous thread to fully exit before starting a new
+    # run.  This prevents the old asyncio event loop from still being torn down
+    # (and LiteLLM's cached async httpx client along with it) when the new run
+    # calls asyncio.run().
+    if _agent_thread_ref is not None and _agent_thread_ref.is_alive():
+        _agent_thread_ref.join(timeout=10)
+        if _agent_thread_ref.is_alive():
+            return jsonify({"error": "Previous run has not finished shutting down. Try again in a moment."}), 409
+
     if not (AGENT_DIR / "instruction.md").exists():
         return jsonify({"error": "instruction.md not found in agent/ -- create it first"}), 400
 
@@ -628,6 +640,7 @@ def api_run_agent():
         return jsonify({"error": f"No API key configured for {provider}. Set {env_var}."}), 400
 
     thread = threading.Thread(target=_agent_thread, daemon=True, name="agent")
+    _agent_thread_ref = thread
     thread.start()
     return jsonify({"status": "started"})
 
