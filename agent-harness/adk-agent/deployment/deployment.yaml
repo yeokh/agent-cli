@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: adk-agent
-          image: image-registry.openshift-image-registry.svc:5000/${NAMESPACE}/adk-agent:latest
+          image: quay.io/khyeo/adk-agent-web:v1
           ports:
             - containerPort: 8080
               protocol: TCP
