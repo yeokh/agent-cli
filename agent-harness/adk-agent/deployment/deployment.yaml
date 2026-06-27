@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adk-agent
+  labels:
+    app: adk-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adk-agent
+  template:
+    metadata:
+      labels:
+        app: adk-agent
+    spec:
+      containers:
+        - name: adk-agent
+          image: image-registry.openshift-image-registry.svc:5000/${NAMESPACE}/adk-agent:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: adk-agent-api-keys
+          env:
+            - name: API_PROVIDER
+              value: "anthropic"
+            - name: MODEL
+              value: "claude-opus-4-5"
+            - name: MAX_TURNS
+              value: "50"
+            - name: ALLOW_SHELL
+              value: "true"
+            - name: SHELL_TIMEOUT
+              value: "60"
+          volumeMounts:
+            - name: agent-volume
+              mountPath: /app/agent
+            - name: input-volume
+              mountPath: /app/input
+            - name: output-volume
+              mountPath: /app/output
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: agent-volume
+          persistentVolumeClaim:
+            claimName: adk-agent-agent-pvc
+        - name: input-volume
+          persistentVolumeClaim:
+            claimName: adk-agent-input-pvc
+        - name: output-volume
+          persistentVolumeClaim:
+            claimName: adk-agent-output-pvc

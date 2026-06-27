@@ -1,0 +1,112 @@
+# ============================================================
+# Playbook: Create application service account and configure limited sudo access
+# Request ID: PB-2026-002
+# Generated for: db-prod-01, db-prod-02, db-prod-03
+# OS: Red Hat Enterprise Linux 8.9
+# Requested by: Marcus Webb on 2026-06-20
+# ============================================================
+
+# Expected inventory entries:
+# [db_servers]
+# db-prod-01 ansible_host=192.168.20.10
+# db-prod-02 ansible_host=192.168.20.11
+# db-prod-03 ansible_host=192.168.20.12
+
+---
+- name: Create application service account and configure limited sudo access
+  hosts: db_servers
+  become: true
+  vars:
+    ansible_connection: ssh
+    ansible_user: ansible
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    
+  tasks:
+    # Create the primary group first
+    - name: Create appgroup system group
+      ansible.builtin.group:
+        name: appgroup
+        gid: 1500
+        system: true
+        state: present
+      
+    # Create the application user
+    - name: Create appuser system account
+      ansible.builtin.user:
+        name: appuser
+        uid: 1500
+        group: appgroup
+        home: /opt/appuser
+        shell: /bin/bash
+        password: '!'
+        system: true
+        state: present
+      
+    # Set home directory permissions
+    - name: Configure /opt/appuser directory permissions
+      ansible.builtin.file:
+        path: /opt/appuser
+        owner: appuser
+        group: appgroup
+        mode: '0700'
+        state: directory
+      
+    # Deploy SSH public key for appuser
+    - name: Add SSH public key for appuser
+      ansible.posix.authorized_key:
+        user: appuser
+        state: present
+        key: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vX... appuser@controller'
+      
+    # Configure sudoers entry with limited command access
+    - name: Configure limited sudo access for appuser
+      community.general.sudoers:
+        name: appuser-limited
+        state: present
+        user: appuser
+        commands: '/opt/app/bin/start.sh, /opt/app/bin/stop.sh'
+        nopasswd: true
+        validate: true
+      
+    # Validation: Verify user account exists
+    - name: Verify appuser account exists
+      ansible.builtin.command: id appuser
+      register: appuser_id
+      changed_when: false
+      
+    - name: Display user verification
+      ansible.builtin.debug:
+        var: appuser_id.stdout
+      
+    # Validation: Verify home directory permissions
+    - name: Verify /opt/appuser directory permissions
+      ansible.builtin.stat:
+        path: /opt/appuser
+      register: appuser_home
+      
+    - name: Display home directory info
+      ansible.builtin.debug:
+        msg: |
+          Home directory: {{ appuser_home.stat.path }}
+          Owner: {{ appuser_home.stat.pw_name }}:{{ appuser_home.stat.gr_name }}
+          Permissions: {{ appuser_home.stat.mode }}
+      
+    # Validation: Verify SSH key is deployed
+    - name: Verify SSH authorized_keys
+      ansible.builtin.stat:
+        path: /opt/appuser/.ssh/authorized_keys
+      register: authorized_keys_file
+      
+    - name: Display SSH key deployment status
+      ansible.builtin.debug:
+        msg: "SSH authorized_keys deployed: {{ authorized_keys_file.stat.exists }}"
+      
+    # Validation: Verify sudoers entry
+    - name: Verify sudoers configuration
+      ansible.builtin.command: sudo -l -U appuser
+      register: sudo_config
+      changed_when: false
+      
+    - name: Display sudoers configuration
+      ansible.builtin.debug:
+        var: sudo_config.stdout_lines

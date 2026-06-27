@@ -1,0 +1,24 @@
+FROM registry.access.redhat.com/ubi9/python-312
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY adk_agent.py .
+COPY templates/ templates/
+
+ENV AGENT_DIR=/app/agent \
+    INPUT_DIR=/app/input \
+    OUTPUT_DIR=/app/output \
+    API_PROVIDER=anthropic \
+    MODEL=claude-haiku-4-5 \
+    MAX_TURNS=50 \
+    ALLOW_SHELL=true \
+    SHELL_TIMEOUT=60
+
+VOLUME ["/app/agent", "/app/input", "/app/output"]
+
+USER 1001
+
+CMD ["python", "/app/adk_agent.py"]
