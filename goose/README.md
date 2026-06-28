@@ -14,6 +14,7 @@ $ goose tui
 
 https://goose-docs.ai/docs/tutorials/goose-in-docker
 
+.goosehints - project/folder level instructions file.
 
 RED HAT Version of Goose
 ========================

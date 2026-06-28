@@ -1,0 +1,9 @@
+[guardrail] Guardrail pass-through (not implemented)
+provider=openrouter  model=deepseek/deepseek-r1  max_turns=50  shell=enabled
+agent=/root/agent-harness/claude-agent/agent  input=/root/agent-harness/claude-agent/input  output=/root/agent-harness/claude-agent/output
+[turn 1/50] stop_reason=tool_use
+[assistant] I'll start by listing the input files to process the Ansible playbook requests.
+[tool_use] list_input_files()
+[result] ["pb-2026-002.txt"]
+[agent] Run cancelled by user
+[result] turns=1  tokens=4261 in / 257 out

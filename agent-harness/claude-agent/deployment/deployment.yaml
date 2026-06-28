@@ -1,28 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: adk-agent
+  name: claude-agent
   labels:
-    app: adk-agent
+    app: claude-agent
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: adk-agent
+      app: claude-agent
   template:
     metadata:
       labels:
-        app: adk-agent
+        app: claude-agent
     spec:
       containers:
-        - name: adk-agent
-          image: quay.io/khyeo/adk-agent:v1
+        - name: claude-agent
+          image: quay.io/khyeo/claude-agent:v1
           ports:
             - containerPort: 8080
               protocol: TCP
           envFrom:
             - secretRef:
-                name: adk-agent-api-keys
+                name: claude-agent-api-keys
           env:
             - name: RUN_MODE
               value: "web"
@@ -32,6 +32,8 @@ spec:
               value: "claude-opus-4-5"
             - name: MAX_TURNS
               value: "50"
+            - name: MAX_OUTPUT_TOKENS
+              value: "16384"
             - name: ALLOW_SHELL
               value: "true"
             - name: SHELL_TIMEOUT
@@ -65,10 +67,10 @@ spec:
       volumes:
         - name: agent-volume
           persistentVolumeClaim:
-            claimName: adk-agent-agent-pvc
+            claimName: claude-agent-agent-pvc
         - name: input-volume
           persistentVolumeClaim:
-            claimName: adk-agent-input-pvc
+            claimName: claude-agent-input-pvc
         - name: output-volume
           persistentVolumeClaim:
-            claimName: adk-agent-output-pvc
+            claimName: claude-agent-output-pvc

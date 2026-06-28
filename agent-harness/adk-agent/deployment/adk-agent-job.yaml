@@ -1,0 +1,111 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: adk-agent-job
+  labels:
+    app: adk-agent
+spec:
+  parallelism: 1
+  completions: 1
+  activeDeadlineSeconds: 3600
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: adk-agent
+    spec:
+      restartPolicy: OnFailure
+
+      # ------------------------------------------------------------------
+      # initContainer: copies ConfigMap-mounted files into the PVCs so the
+      # agent container sees up-to-date instruction.md and payload files.
+      # ------------------------------------------------------------------
+      initContainers:
+      - name: seed-volumes
+        image: registry.access.redhat.com/ubi9/ubi9
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -e
+            echo "[init] Copying instruction.md -> /app/agent/"
+            cp /cm/agent/instruction.md /app/agent/instruction.md
+            echo "[init] Copying input payload files -> /app/input/"
+            cp /cm/input/* /app/input/
+            echo "[init] Seed complete."
+        securityContext:
+          runAsUser: 1001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: cm-agent
+          mountPath: /cm/agent
+          readOnly: true
+        - name: cm-input
+          mountPath: /cm/input
+          readOnly: true
+        - name: agent-volume
+          mountPath: /app/agent
+        - name: input-volume
+          mountPath: /app/input
+
+      containers:
+      - name: adk-agent
+        # Replace with your actual image reference, e.g.:
+        #   quay.io/<your-org>/adk-agent:latest
+        image: quay.io/khyeo/adk-agent:v1
+        envFrom:
+        - secretRef:
+            name: adk-agent-api-keys
+        env:
+        - name: RUN_MODE
+          value: "agent"
+        - name: API_PROVIDER
+          value: "anthropic"
+        - name: MODEL
+          value: "claude-haiku-4-5"
+        - name: MAX_TURNS
+          value: "50"
+        - name: ALLOW_SHELL
+          value: "true"
+        - name: SHELL_TIMEOUT
+          value: "60"
+        securityContext:
+          runAsUser: 1001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        volumeMounts:
+        - name: agent-volume
+          mountPath: /app/agent
+        - name: input-volume
+          mountPath: /app/input
+        - name: output-volume
+          mountPath: /app/output
+
+      volumes:
+      - name: cm-agent
+        configMap:
+          name: adk-agent-instruction
+      - name: cm-input
+        configMap:
+          name: adk-agent-input-files
+      - name: agent-volume
+        persistentVolumeClaim:
+          claimName: adk-agent-agent-pvc
+      - name: input-volume
+        persistentVolumeClaim:
+          claimName: adk-agent-input-pvc
+      - name: output-volume
+        persistentVolumeClaim:
+          claimName: adk-agent-output-pvc

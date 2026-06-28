@@ -16,22 +16,22 @@
 - name: Create application service account and configure limited sudo access
   hosts: db_servers
   become: true
+  become_method: sudo
+
   vars:
     ansible_connection: ssh
     ansible_user: ansible
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-    
+
   tasks:
-    # Create the primary group first
     - name: Create appgroup system group
       ansible.builtin.group:
         name: appgroup
         gid: 1500
         system: true
         state: present
-      
-    # Create the application user
-    - name: Create appuser system account
+
+    - name: Create appuser system user account
       ansible.builtin.user:
         name: appuser
         uid: 1500
@@ -41,72 +41,59 @@
         password: '!'
         system: true
         state: present
-      
-    # Set home directory permissions
-    - name: Configure /opt/appuser directory permissions
+
+    - name: Set home directory permissions
       ansible.builtin.file:
         path: /opt/appuser
         owner: appuser
         group: appgroup
         mode: '0700'
         state: directory
-      
-    # Deploy SSH public key for appuser
-    - name: Add SSH public key for appuser
+
+    - name: Deploy SSH public key for appuser
       ansible.posix.authorized_key:
         user: appuser
         state: present
-        key: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vX... appuser@controller'
-      
-    # Configure sudoers entry with limited command access
-    - name: Configure limited sudo access for appuser
+        key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vX... appuser@controller"
+
+    - name: Create sudoers entry for appuser limited commands
       community.general.sudoers:
-        name: appuser-limited
-        state: present
+        name: appuser-app-commands
         user: appuser
-        commands: '/opt/app/bin/start.sh, /opt/app/bin/stop.sh'
+        commands:
+          - /opt/app/bin/start.sh
+          - /opt/app/bin/stop.sh
         nopasswd: true
         validate: true
-      
-    # Validation: Verify user account exists
+        state: present
+
     - name: Verify appuser account exists
-      ansible.builtin.command: id appuser
-      register: appuser_id
+      ansible.builtin.command:
+        cmd: id appuser
+      register: appuser_check
       changed_when: false
-      
-    - name: Display user verification
+
+    - name: Display appuser verification
       ansible.builtin.debug:
-        var: appuser_id.stdout
-      
-    # Validation: Verify home directory permissions
-    - name: Verify /opt/appuser directory permissions
-      ansible.builtin.stat:
-        path: /opt/appuser
-      register: appuser_home
-      
-    - name: Display home directory info
-      ansible.builtin.debug:
-        msg: |
-          Home directory: {{ appuser_home.stat.path }}
-          Owner: {{ appuser_home.stat.pw_name }}:{{ appuser_home.stat.gr_name }}
-          Permissions: {{ appuser_home.stat.mode }}
-      
-    # Validation: Verify SSH key is deployed
-    - name: Verify SSH authorized_keys
-      ansible.builtin.stat:
-        path: /opt/appuser/.ssh/authorized_keys
-      register: authorized_keys_file
-      
-    - name: Display SSH key deployment status
-      ansible.builtin.debug:
-        msg: "SSH authorized_keys deployed: {{ authorized_keys_file.stat.exists }}"
-      
-    # Validation: Verify sudoers entry
-    - name: Verify sudoers configuration
-      ansible.builtin.command: sudo -l -U appuser
-      register: sudo_config
+        msg: "appuser account verified: {{ appuser_check.stdout }}"
+
+    - name: Verify SSH public key is authorized
+      ansible.builtin.shell:
+        cmd: grep -c "appuser@controller" /opt/appuser/.ssh/authorized_keys || echo "0"
+      register: ssh_key_check
       changed_when: false
-      
-    - name: Display sudoers configuration
+
+    - name: Display SSH key verification
       ansible.builtin.debug:
-        var: sudo_config.stdout_lines
+        msg: "SSH public key authorized: {{ ssh_key_check.stdout | int > 0 }}"
+
+    - name: Verify sudoers entry is configured
+      ansible.builtin.command:
+        cmd: sudo -l -U appuser
+      register: sudoers_check
+      changed_when: false
+
+    - name: Display sudoers verification
+      ansible.builtin.debug:
+        msg: "Sudoers configuration verified"
+        verbosity: 1

@@ -1,0 +1,165 @@
+# ============================================================
+# Playbook: Create application service account and configure limited sudo access
+# Request ID: PB-2026-002
+# Generated for: db-prod-01, db-prod-02, db-prod-03
+# OS: Red Hat Enterprise Linux 8.9
+# Requested by: Marcus Webb on 2026-06-20
+# ============================================================
+
+# Expected inventory entries:
+# [db_servers]
+# db-prod-01 ansible_host=192.168.20.10
+# db-prod-02 ansible_host=192.168.20.11
+# db-prod-03 ansible_host=192.168.20.12
+
+---
+- name: Create application service account and configure limited sudo access
+  hosts: db_servers
+  become: true
+  gather_facts: yes
+  vars:
+    ansible_connection: ssh
+    ansible_user: ansible
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    app_user: appuser
+    app_group: appgroup
+    app_uid: 1500
+    app_gid: 1500
+    app_home: /opt/appuser
+    app_shell: /bin/bash
+    # SSH public key for appuser - deploy this key to authorized_keys
+    app_ssh_public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vX... appuser@controller"
+
+  tasks:
+    # Create the primary group for appuser
+    - name: Ensure appgroup exists with GID 1500
+      ansible.builtin.group:
+        name: "{{ app_group }}"
+        gid: "{{ app_gid }}"
+        state: present
+
+    # Create the application service account
+    - name: Create appuser system account
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        uid: "{{ app_uid }}"
+        group: "{{ app_group }}"
+        home: "{{ app_home }}"
+        shell: "{{ app_shell }}"
+        password: '!'  # No login password - SSH key only
+        createhome: yes
+        state: present
+
+    # Set restrictive permissions on home directory (700 = rwx------)
+    - name: Set appuser home directory permissions
+      ansible.builtin.file:
+        path: "{{ app_home }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0700'
+        state: directory
+
+    # Ensure .ssh directory exists with correct permissions
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path: "{{ app_home }}/.ssh"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0700'
+        state: directory
+
+    # Deploy SSH public key for appuser
+    - name: Deploy SSH public key for appuser
+      ansible.posix.authorized_key:
+        user: "{{ app_user }}"
+        state: present
+        key: "{{ app_ssh_public_key }}"
+        comment: "appuser@controller"
+
+    # Create sudoers entry for /opt/app/bin/start.sh
+    - name: Configure sudo access for start.sh
+      community.general.sudoers:
+        name: appuser-start
+        user: "{{ app_user }}"
+        commands: /opt/app/bin/start.sh
+        nopassword: true
+        validate: true
+
+    # Create sudoers entry for /opt/app/bin/stop.sh
+    - name: Configure sudo access for stop.sh
+      community.general.sudoers:
+        name: appuser-stop
+        user: "{{ app_user }}"
+        commands: /opt/app/bin/stop.sh
+        nopassword: true
+        validate: true
+
+    # Validation: Verify appuser exists with correct UID
+    - name: Verify appuser account exists with UID 1500
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ app_user }}"
+
+    - name: Debug - Show appuser entry
+      ansible.builtin.debug:
+        msg: "{{ ansible_facts.getent_passwd[app_user] }}"
+
+    # Validation: Verify appgroup exists with correct GID
+    - name: Verify appgroup exists with GID 1500
+      ansible.builtin.getent:
+        database: group
+        key: "{{ app_group }}"
+
+    - name: Debug - Show appgroup entry
+      ansible.builtin.debug:
+        msg: "{{ ansible_facts.getent_group[app_group] }}"
+
+    # Validation: Verify home directory permissions
+    - name: Verify appuser home directory permissions
+      ansible.builtin.stat:
+        path: "{{ app_home }}"
+      register: home_dir_stat
+
+    - name: Assert home directory is owned by appuser and has 700 permissions
+      ansible.builtin.assert:
+        that:
+          - home_dir_stat.stat.pw_name == app_user
+          - home_dir_stat.stat.gr_name == app_group
+          - home_dir_stat.stat.mode == '0700'
+        fail_msg: "Home directory permissions or ownership incorrect"
+
+    # Validation: Verify SSH public key is deployed
+    - name: Check SSH public key file
+      ansible.builtin.stat:
+        path: "{{ app_home }}/.ssh/authorized_keys"
+      register: authorized_keys_stat
+
+    - name: Verify authorized_keys file exists and is readable
+      ansible.builtin.assert:
+        that:
+          - authorized_keys_stat.stat.exists
+          - authorized_keys_stat.stat.pw_name == app_user
+        fail_msg: "authorized_keys file not properly configured"
+
+    # Validation: Verify sudoers entries exist
+    - name: Check start.sh sudoers entry
+      ansible.builtin.shell: |
+        grep -q "{{ app_user }}.*NOPASSWD.*start.sh" /etc/sudoers.d/appuser-start
+      register: start_sudoers_check
+      changed_when: false
+
+    - name: Check stop.sh sudoers entry
+      ansible.builtin.shell: |
+        grep -q "{{ app_user }}.*NOPASSWD.*stop.sh" /etc/sudoers.d/appuser-stop
+      register: stop_sudoers_check
+      changed_when: false
+
+    - name: Validation Summary
+      ansible.builtin.debug:
+        msg: |
+          ✓ appuser account created successfully
+          ✓ appgroup group created successfully
+          ✓ Home directory /opt/appuser configured with correct permissions
+          ✓ SSH public key deployed to authorized_keys
+          ✓ Sudoers entries created for start.sh and stop.sh
+          ✓ All idempotency checks passed

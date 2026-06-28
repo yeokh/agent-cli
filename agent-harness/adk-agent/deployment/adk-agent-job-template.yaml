@@ -1,0 +1,154 @@
+# -----------------------------------------------------------------------
+# On-demand per-job template
+#
+# Each job gets its own input/output PVCs and ConfigMaps so multiple
+# jobs can run in parallel without sharing mutable state.
+#
+# Workflow (replace JOB_ID with a unique value, e.g. job-001):
+#
+#   JOB_ID=job-001
+#
+#   # 1. Create per-job PVCs
+#   sed "s/JOB_ID/$JOB_ID/g" deployment/adk-agent-job-pvc-template.yaml \
+#     | oc apply -f -
+#
+#   # 2. Create per-job ConfigMaps
+#   oc create configmap adk-$JOB_ID-instruction \
+#     --from-file=agent/instruction.md \
+#     --dry-run=client -o yaml | oc apply -f -
+#
+#   oc create configmap adk-$JOB_ID-input-files \
+#     --from-file=input/ \
+#     --dry-run=client -o yaml | oc apply -f -
+#
+#   # 3. Submit the job
+#   sed "s/JOB_ID/$JOB_ID/g" deployment/adk-agent-job-template.yaml \
+#     | oc apply -f -
+#
+#   # 4. Follow logs
+#   oc logs -f -l job-id=$JOB_ID --max-log-requests=1
+#
+#   # 5. Retrieve output
+#   oc run output-reader-$JOB_ID \
+#     --image=registry.access.redhat.com/ubi9/ubi9 \
+#     --restart=Never \
+#     --overrides="{\"spec\":{\"containers\":[{\"name\":\"r\",\"image\":\"registry.access.redhat.com/ubi9/ubi9\",\"command\":[\"sleep\",\"3600\"],\"volumeMounts\":[{\"name\":\"out\",\"mountPath\":\"/app/output\"}]}],\"volumes\":[{\"name\":\"out\",\"persistentVolumeClaim\":{\"claimName\":\"adk-$JOB_ID-output-pvc\"}}]}}"
+#   oc wait pod/output-reader-$JOB_ID --for=condition=Ready --timeout=60s
+#   oc cp output-reader-$JOB_ID:/app/output ./output-$JOB_ID/
+#   oc delete pod output-reader-$JOB_ID
+#
+#   # 6. Clean up (after output is retrieved)
+#   oc delete job adk-JOB_ID
+#   oc delete pvc adk-JOB_ID-input-pvc adk-JOB_ID-output-pvc
+#   oc delete configmap adk-JOB_ID-instruction adk-JOB_ID-input-files
+# -----------------------------------------------------------------------
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: adk-JOB_ID
+  labels:
+    app: adk-agent
+    job-id: JOB_ID
+spec:
+  parallelism: 1
+  completions: 1
+  activeDeadlineSeconds: 3600
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: adk-agent
+        job-id: JOB_ID
+    spec:
+      restartPolicy: Never
+
+      # ----------------------------------------------------------------
+      # initContainer: seeds per-job ConfigMaps into PVCs so the agent
+      # container sees the correct instruction.md and payload files.
+      # ----------------------------------------------------------------
+      initContainers:
+      - name: seed-volumes
+        image: registry.access.redhat.com/ubi9/ubi9
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -e
+            echo "[init] Copying instruction.md -> /app/agent/"
+            cp /cm/agent/instruction.md /app/agent/instruction.md
+            echo "[init] Copying input payload files -> /app/input/"
+            cp /cm/input/* /app/input/
+            echo "[init] Seed complete."
+        securityContext:
+          runAsUser: 1001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: cm-agent
+          mountPath: /cm/agent
+          readOnly: true
+        - name: cm-input
+          mountPath: /cm/input
+          readOnly: true
+        - name: agent-volume
+          mountPath: /app/agent
+        - name: input-volume
+          mountPath: /app/input
+
+      containers:
+      - name: adk-agent
+        image: quay.io/khyeo/adk-agent:v1
+        envFrom:
+        - secretRef:
+            name: adk-agent-api-keys
+        env:
+        - name: RUN_MODE
+          value: "agent"
+        - name: API_PROVIDER
+          value: "anthropic"
+        - name: MODEL
+          value: "claude-haiku-4-5"
+        - name: MAX_TURNS
+          value: "50"
+        - name: ALLOW_SHELL
+          value: "true"
+        - name: SHELL_TIMEOUT
+          value: "60"
+        securityContext:
+          runAsUser: 1001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        volumeMounts:
+        - name: agent-volume
+          mountPath: /app/agent
+        - name: input-volume
+          mountPath: /app/input
+        - name: output-volume
+          mountPath: /app/output
+
+      volumes:
+      - name: cm-agent
+        configMap:
+          name: adk-JOB_ID-instruction
+      - name: cm-input
+        configMap:
+          name: adk-JOB_ID-input-files
+      - name: agent-volume
+        emptyDir: {}
+      - name: input-volume
+        persistentVolumeClaim:
+          claimName: adk-JOB_ID-input-pvc
+      - name: output-volume
+        persistentVolumeClaim:
+          claimName: adk-JOB_ID-output-pvc

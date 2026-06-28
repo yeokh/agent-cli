@@ -2,6 +2,10 @@ https://kiro.dev/cli/
 # curl -fsSL https://cli.kiro.dev/install | bash
 # kiro-cli
 
+AGENTS.md - project/folder level instructions file.
+
+
+TO TEST:
 
 ▸ Credits: 0.01 • Time: 1s
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

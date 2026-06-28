@@ -15,208 +15,131 @@
 - name: Install IIS and deploy placeholder corporate website
   hosts: web_servers
   become: false
+
   vars:
     ansible_connection: winrm
     ansible_user: ansible_svc
     ansible_winrm_transport: ntlm
     ansible_winrm_server_cert_validation: ignore
     ansible_port: 5985
-    
+    iis_site_path: C:\inetpub\sites\corpsite
+
   tasks:
-    # Install IIS Web Server role with required features
-    - name: Install IIS Web Server role
+    - name: Install IIS Web Server role and required features
       ansible.windows.win_feature:
-        name: Web-Server
+        name:
+          - Web-Server
+          - Web-Static-Content
+          - Web-Default-Doc
+          - Web-Http-Logging
+          - Web-Request-Monitor
+          - Web-Filtering
+          - Web-Stat-Compression
         state: present
         include_management_tools: true
       register: iis_install
-      
-    - name: Install IIS Static Content feature
-      ansible.windows.win_feature:
-        name: Web-Static-Content
-        state: present
-      
-    - name: Install IIS Default Document feature
-      ansible.windows.win_feature:
-        name: Web-Default-Doc
-        state: present
-      
-    - name: Install IIS HTTP Logging feature
-      ansible.windows.win_feature:
-        name: Web-Http-Logging
-        state: present
-      
-    - name: Install IIS Request Monitoring feature
-      ansible.windows.win_feature:
-        name: Web-Request-Monitor
-        state: present
-      
-    - name: Install IIS Request Filtering feature
-      ansible.windows.win_feature:
-        name: Web-Filtering
-        state: present
-      
-    - name: Install IIS Static Content Compression feature
-      ansible.windows.win_feature:
-        name: Web-Stat-Compression
-        state: present
-      
-    # Reboot if IIS installation required it
+
     - name: Reboot if IIS installation required it
       ansible.windows.win_reboot:
+        msg: "IIS installation requires reboot"
+        pre_reboot_delay: 15
       when: iis_install.reboot_required
-      
-    # Ensure W3SVC service is running and enabled
-    - name: Ensure W3SVC service is running and enabled
+
+    - name: Ensure W3SVC service is started and enabled
       ansible.windows.win_service:
         name: W3SVC
         state: started
         startup_type: auto
-      
-    # Create the website content directory
-    - name: Create C:\inetpub\sites directory
+
+    - name: Create website content directory
       ansible.windows.win_file:
-        path: C:\inetpub\sites
+        path: "{{ iis_site_path }}"
         state: directory
-      
-    - name: Create C:\inetpub\sites\corpsite directory
-      ansible.windows.win_file:
-        path: C:\inetpub\sites\corpsite
-        state: directory
-      
-    # Deploy placeholder index.html
-    - name: Deploy placeholder index.html
+
+    - name: Create placeholder index.html
       ansible.windows.win_copy:
+        dest: "{{ iis_site_path }}\index.html"
         content: |
           <!DOCTYPE html>
           <html>
           <head>
-              <meta charset="UTF-8">
               <title>Corporate Portal</title>
-              <style>
-                  body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-                  h1 { color: #333; }
-              </style>
           </head>
           <body>
-              <h1>Corporate Portal</h1>
-              <p>Site coming soon.</p>
+              <h1>Site coming soon.</h1>
           </body>
           </html>
-        dest: C:\inetpub\sites\corpsite\index.html
-      
-    # Create the application pool
+
     - name: Create CorpSitePool application pool
       community.windows.win_iis_webapppool:
         name: CorpSitePool
         state: present
+        managed_runtime_version: ""
+        pipeline_mode: Integrated
         attributes:
-          managedRuntimeVersion: ''
-          pipelineMode: Integrated
-      register: app_pool_result
-      
-    - name: Ensure CorpSitePool is started
-      ansible.windows.win_service:
-        name: 'AppPool CorpSitePool'
+          managedRuntimeVersion: ""
+
+    - name: Start CorpSitePool application pool
+      community.windows.win_iis_webapppool:
+        name: CorpSitePool
         state: started
-      
-    # Create the website
-    - name: Create CorpSite website
+
+    - name: Stop default IIS website to avoid port 80 conflict
+      community.windows.win_iis_website:
+        name: "Default Web Site"
+        state: stopped
+
+    - name: Create CorpSite IIS website
       community.windows.win_iis_website:
         name: CorpSite
         state: present
-        physical_path: C:\inetpub\sites\corpsite
+        physical_path: "{{ iis_site_path }}"
         application_pool: CorpSitePool
+        port: 80
+        host_header: corpsite.example.com
         bindings:
           - protocol: http
             port: 80
-            hostheader: corpsite.example.com
-      register: website_result
-      
-    - name: Ensure CorpSite website is started
+            host_header: corpsite.example.com
+
+    - name: Start CorpSite website
       community.windows.win_iis_website:
         name: CorpSite
         state: started
-      
-    # Stop the Default Web Site to avoid port 80 conflict
-    - name: Stop Default Web Site
-      community.windows.win_iis_website:
-        name: 'Default Web Site'
-        state: stopped
-      
-    # Configure Windows Firewall rule for HTTP (port 80)
-    - name: Add Windows Firewall inbound rule for HTTP port 80
+
+    - name: Add Windows Firewall inbound rule for HTTP
       ansible.windows.win_firewall_rule:
-        name: 'Allow HTTP Port 80'
-        enabled: true
-        state: present
+        name: Allow HTTP
         direction: in
         action: allow
         protocol: tcp
-        localport: 80
-      
-    # Validation: Verify IIS role is installed
-    - name: Verify Web-Server role is installed
-      ansible.windows.win_feature:
-        name: Web-Server
+        local_port: 80
         state: present
-      register: web_server_feature
-      
-    - name: Display IIS installation status
-      ansible.builtin.debug:
-        msg: "Web-Server role installed: {{ not web_server_feature.changed }}"
-      
-    # Validation: Verify W3SVC service is running
-    - name: Verify W3SVC service status
+        enabled: true
+
+    - name: Verify IIS service is running
       ansible.windows.win_service_info:
         name: W3SVC
-      register: w3svc_info
-      
-    - name: Display W3SVC service status
+      register: w3svc_status
+
+    - name: Display IIS service status
       ansible.builtin.debug:
-        msg: |
-          Service: {{ w3svc_info.services[0].display_name }}
-          State: {{ w3svc_info.services[0].state }}
-          Startup: {{ w3svc_info.services[0].startup_type }}
-      
-    # Validation: Verify website directory exists
-    - name: Verify website content directory
+        msg: "W3SVC service state: {{ w3svc_status.services[0].state }}"
+
+    - name: Verify website directory exists
       ansible.windows.win_stat:
-        path: C:\inetpub\sites\corpsite
-      register: corpsite_dir
-      
-    - name: Display website directory status
+        path: "{{ iis_site_path }}"
+      register: site_path_stat
+
+    - name: Display website directory verification
       ansible.builtin.debug:
-        msg: "Website directory exists: {{ corpsite_dir.stat.exists }}"
-      
-    # Validation: Verify index.html is deployed
-    - name: Verify index.html is deployed
+        msg: "Website directory exists: {{ site_path_stat.stat.exists }}"
+
+    - name: Verify index.html exists
       ansible.windows.win_stat:
-        path: C:\inetpub\sites\corpsite\index.html
-      register: index_html
-      
-    - name: Display index.html deployment status
+        path: "{{ iis_site_path }}\index.html"
+      register: index_file_stat
+
+    - name: Display index.html verification
       ansible.builtin.debug:
-        msg: "index.html deployed: {{ index_html.stat.exists }}"
-      
-    # Validation: Check IIS configuration
-    - name: Verify CorpSite website is started
-      ansible.windows.win_shell: |
-        Get-Website -Name "CorpSite" | Select-Object -Property Name, State
-      register: website_status
-      changed_when: false
-      
-    - name: Display website status
-      ansible.builtin.debug:
-        var: website_status.stdout_lines
-      
-    # Validation: Verify firewall rule
-    - name: Verify HTTP firewall rule
-      ansible.windows.win_shell: |
-        Get-NetFirewallRule -DisplayName "Allow HTTP Port 80" -ErrorAction SilentlyContinue | Select-Object -Property DisplayName, Enabled, Direction, Action
-      register: firewall_rule
-      changed_when: false
-      
-    - name: Display firewall rule status
-      ansible.builtin.debug:
-        var: firewall_rule.stdout_lines
+        msg: "Placeholder index.html exists: {{ index_file_stat.stat.exists }}"

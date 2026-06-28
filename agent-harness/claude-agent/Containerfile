@@ -1,0 +1,44 @@
+FROM registry.access.redhat.com/ubi9/python-312
+
+LABEL io.k8s.display-name="Claude Agent Harness" \
+      io.k8s.description="Anthropic Claude SDK file-processing agent with optional Flask web UI" \
+      io.openshift.expose-services="8080:http" \
+      io.openshift.tags="python,claude,agent,anthropic"
+
+WORKDIR /app
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir .
+
+COPY README.md .
+COPY claude_agent.py .
+COPY web_app.py .
+COPY templates/ templates/
+COPY entrypoint.sh .
+
+USER 0
+RUN mkdir -p /app/agent /app/input /app/output && \
+    chown -R 1001:0 /app && \
+    chmod -R g=u /app && \
+    chmod +x /app/entrypoint.sh
+
+ENV AGENT_DIR=/app/agent \
+    INPUT_DIR=/app/input \
+    OUTPUT_DIR=/app/output \
+    API_PROVIDER=anthropic \
+    MODEL=claude-opus-4-5 \
+    MAX_TURNS=50 \
+    MAX_OUTPUT_TOKENS=16384 \
+    ALLOW_SHELL=true \
+    SHELL_TIMEOUT=60 \
+    PORT=8080 \
+    HOST=0.0.0.0 \
+    RUN_MODE=agent
+
+VOLUME ["/app/agent", "/app/input", "/app/output"]
+
+EXPOSE 8080
+
+USER 1001
+
+CMD ["/app/entrypoint.sh"]

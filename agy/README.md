@@ -6,6 +6,8 @@ agy
 https://antigravity.google/blog/introducing-google-antigravity-sdk
 https://github.com/google-antigravity/antigravity-sdk-python
 
+AGENTS.md - project/folder level instructions
+
 
 ### TEST CASE 1 ###
 Please read the .md file instruction in the ./agent folder.  Then process the files in the ./inbox folder.  And write the results and logs in the ./outbox folder.  Stop once you have process all the files in the inbox.

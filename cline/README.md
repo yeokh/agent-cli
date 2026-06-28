@@ -5,6 +5,7 @@ https://cline.bot/sdk
 # npm list -g --depth=0
 # cline --help
 
+.clinerules - project/folder level instructions file.
 
 ### TEST CASE 1 ###
 Please read the .md file instruction in the ./agent folder.  Then process the files in the ./inbox folder.  And write the results and logs in the ./outbox folder.  Stop once you have process all the files in the inbox.

@@ -9,6 +9,10 @@ export ANTHROPIC_API_KEY=<redacted-anthropic-api-key>
 pi
 /login
 
+
+AGENTS.md - project/folder level instructions file.
+
+
 ### TEST CASE 1 ###
 Please read the .md file instruction in the ./agent folder.  Then process the files in the ./inbox folder.  And write the results and logs in the ./outbox folder.  Stop once you have process all the files in the inbox.
 
