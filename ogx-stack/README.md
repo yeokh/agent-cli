@@ -43,4 +43,41 @@ $ podman run -it --rm -p 8321:8321 \
 $ podman run --entrypoint /bin/bash ...
 # /usr/local/bin/ogx-entrypoint.sh
 
-  
+
+OpenShift Deployment - OGX Starter
+==================================
+$ vi deploy-ogx.yaml
+$ oc login ...
+$ oc project <my_project>
+$ oc apply -f deploy-ogx.yaml
+$ oc get services >> internal fqdn end-point (only from within OpenShift) 
+$ oc get routes   >> external fqdn end-point
+
+$ curl -s https://distribution-starter-route-aa-ogx-stack.apps.ocp.b7785.sandbox5220.opentlc.com/v1/chat/completions \
+  -H "Content-Type: application/json"   -H "Authorization: Bearer fake" \
+  -d '{
+    "model": "openai/openai/gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "Hello. Response in one word.  What is the capital of India."}
+    ]
+  }'
+
+
+The list of available providers/models can be provided via dynamic passthrough to the providers or via a defined list of models.
+
+Dynamic Way (Passthrough)
+The client applications can access the models directly available on providers.  
+OGX proxy will forward whatever model string your client requests directly to the providers. 
+
+Pre-defined List (Enforced List via ConfigMap)
+To restrict a curated list of providers/models, or to map to custom aliases, we need to use a configuration file (run.yaml).  
+We can set this up using OpenShift ConfigMap.
+
+
+References:
+RAG with OGX - https://developers.redhat.com/articles/2026/05/26/build-enterprise-rag-system-ogx#  
+Upstream OGX deployment on k8s - https://ogx-ai.github.io/docs/deploying/kubernetes_deployment
+OGX OpenShift deployment - https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_ogx/activating-the-ogx-operator_rag
+
+
+

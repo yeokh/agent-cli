@@ -1,0 +1,109 @@
+# ============================================================
+# Playbook: Create application service account and configure limited sudo access
+# Request ID: PB-2026-002
+# Generated for: db-prod-01, db-prod-02, db-prod-03
+# OS: Red Hat Enterprise Linux 8.9
+# Requested by: Marcus Webb on 2026-06-20
+# ============================================================
+
+# Expected inventory entries:
+# [appuser_sudo_hosts]
+# db-prod-01 ansible_host=192.168.20.10
+# db-prod-02 ansible_host=192.168.20.11
+# db-prod-03 ansible_host=192.168.20.12
+
+- name: Create application service account and configure limited sudo access
+  hosts: appuser_sudo_hosts
+  become: true
+  vars:
+    ansible_connection: ssh
+    ansible_user: ansible
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+  tasks:
+    - name: Create appgroup group
+      ansible.builtin.group:
+        name: appgroup
+        gid: 1500
+        state: present
+
+    - name: Create appuser system user
+      ansible.builtin.user:
+        name: appuser
+        uid: 1500
+        group: appgroup
+        home: /opt/appuser
+        shell: /bin/bash
+        password: '!'
+        state: present
+        create_home: true
+
+    - name: Enforce home directory permissions and ownership
+      ansible.builtin.file:
+        path: /opt/appuser
+        owner: appuser
+        group: appgroup
+        mode: '0700'
+        state: directory
+
+    - name: Configure SSH authorized key for appuser
+      ansible.posix.authorized_key:
+        user: appuser
+        key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vX... appuser@controller"
+        state: present
+
+    - name: Validate appuser account and group configuration
+      ansible.builtin.command: getent passwd appuser
+      register: appuser_passwd_check
+      changed_when: false
+
+    - name: Debug appuser passwd entry
+      ansible.builtin.debug:
+        var: appuser_passwd_check.stdout
+
+    - name: Validate appgroup group configuration
+      ansible.builtin.command: getent group appgroup
+      register: appgroup_check
+      changed_when: false
+
+    - name: Debug appgroup entry
+      ansible.builtin.debug:
+        var: appgroup_check.stdout
+
+    - name: Validate home directory permissions, owner, and group
+      ansible.builtin.command: ls -ld /opt/appuser
+      register: appuser_home_check
+      changed_when: false
+
+    - name: Debug home directory details
+      ansible.builtin.debug:
+        var: appuser_home_check.stdout
+
+    - name: Configure sudoers privileges for appuser
+      community.general.sudoers:
+        name: appuser-sudo
+        user: appuser
+        commands:
+          - /opt/app/bin/start.sh
+          - /opt/app/bin/stop.sh
+        nopassword: true
+        state: present
+        validation: required
+
+    - name: Validate sudoers configuration file syntax
+      ansible.builtin.command: visudo -c -f /etc/sudoers.d/appuser-sudo
+      register: sudoers_check
+      changed_when: false
+
+    - name: Debug sudoers syntax validation result
+      ansible.builtin.debug:
+        var: sudoers_check.stdout
+
+    - name: Verify appuser sudo permissions
+      ansible.builtin.command: sudo -U appuser -l
+      register: appuser_sudo_list
+      changed_when: false
+
+    - name: Debug appuser sudo permissions list
+      ansible.builtin.debug:
+        var: appuser_sudo_list.stdout

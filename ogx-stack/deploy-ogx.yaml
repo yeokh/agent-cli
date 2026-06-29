@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: distribution-starter-secret
+  labels:
+    app: distribution-starter
+type: Opaque
+stringData:
+  # OpenShift best practice: Keep your API keys out of plain-text deployment configs
+  OPENAI_API_KEY: "REPLACE_WITH_YOUR_OPENROUTER_API_KEY"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: distribution-starter
+  labels:
+    app: distribution-starter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: distribution-starter
+  template:
+    metadata:
+      labels:
+        app: distribution-starter
+    spec:
+      containers:
+      - name: distribution-starter
+        image: ogxai/distribution-starter:latest
+        ports:
+        - containerPort: 8321
+          protocol: TCP
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: OPENAI_API_KEY
+        - name: OPENAI_BASE_URL
+          value: "https://openrouter.ai/api/v1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: distribution-starter-service
+  labels:
+    app: distribution-starter
+spec:
+  ports:
+  - port: 8321
+    targetPort: 8321
+    protocol: TCP
+  selector:
+    app: distribution-starter
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: distribution-starter-route
+  labels:
+    app: distribution-starter
+spec:
+  to:
+    kind: Service
+    name: distribution-starter-service
+  port:
+    targetPort: 8321
+  tls:
+    termination: edge # Enables HTTPS termination at the OpenShift router
+

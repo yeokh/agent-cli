@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ogx-model-config
+  labels:
+    app: distribution-starter
+data:
+  # Multi-provider routing setup for OGX
+  run.yaml: |
+    version: '2'
+    image_name: starter
+    apis:
+      - inference
+      - agents
+    providers:
+      inference:
+        - provider_id: openrouter-backend
+          provider_type: remote::openai
+          config:
+            url: "https://openrouter.ai/api/v1"
+            api_key: "${OPENAI_API_KEY}"
+        - provider_id: anthropic-backend
+          provider_type: remote::anthropic
+          config:
+            api_key: "${ANTHROPIC_API_KEY}"
+    models:
+      # --- OpenRouter Fleet ---
+      - model_id: "meta-llama/llama-3.3-70b"
+        provider_id: openrouter-backend
+      
+      # --- Native Anthropic Fleet ---
+      # model_id is what your apps will call; provider_model_id is what Anthropic expects
+      - model_id: "claude-3-5-sonnet"
+        provider_id: anthropic-backend
+        provider_model_id: "claude-3-5-sonnet-latest"
+      - model_id: "claude-3-haiku"
+        provider_id: anthropic-backend
+        provider_model_id: "claude-3-haiku-20240307"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: distribution-starter-secret
+  labels:
+    app: distribution-starter
+type: Opaque
+stringData:
+  OPENAI_API_KEY: "sk-or-v1-xxx"
+  ANTHROPIC_API_KEY: "sk-ant-xxx" # Add your real Anthropic key here
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: distribution-starter
+  labels:
+    app: distribution-starter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: distribution-starter
+  template:
+    metadata:
+      labels:
+        app: distribution-starter
+    spec:
+      containers:
+      - name: distribution-starter
+        image: ogxai/distribution-starter:latest
+        ports:
+        - containerPort: 8321
+          protocol: TCP
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: OPENAI_API_KEY
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: ANTHROPIC_API_KEY
+        - name: RUN_CONFIG_PATH
+          value: "/etc/ogx/run.yaml"
+        volumeMounts:
+        - name: config-volume
+          mountPath: "/etc/ogx"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ogx-model-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: distribution-starter-service
+  labels:
+    app: distribution-starter
+spec:
+  ports:
+  - port: 8321
+    targetPort: 8321
+  selector:
+    app: distribution-starter
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: distribution-starter-route
+  labels:
+    app: distribution-starter
+spec:
+  to:
+    kind: Service
+    name: distribution-starter-service
+  port:
+    targetPort: 8321
+  tls:
+    termination: edge
