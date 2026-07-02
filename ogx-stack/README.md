@@ -80,4 +80,26 @@ Upstream OGX deployment on k8s - https://ogx-ai.github.io/docs/deploying/kuberne
 OGX OpenShift deployment - https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_ogx/activating-the-ogx-operator_rag
 
 
+Simple OGX with API Token (TO TEST)
+=========================
+Out of the box, no. The ogxai/distribution-starter (OGX/Llama Stack architecture) is designed to act as an open applicat
+ion gateway middleware. It does not feature a native inbound API_KEY configuration flag to secure its own endpoints (whi
+ch is why the official documentation examples tell you to pass api_key="fake" in your client SDK setup).
+
+However, because you are deploying to OpenShift, yes, you can easily enforce this. The standard, production-grade way to
+ secure an open middleware container is to offload authentication to a Sidecar Proxy Guard inside the same Pod.
+
+By injecting a tiny Nginx container into your deployment, you can intercept incoming traffic, validate a custom Authoriz
+ation: Bearer <token> header against an OpenShift Secret, and only pass authorized traffic through to OGX.
+
+<deploy-ogx-nginx.yaml>
+
+OpenShift Route and Service point directly to port 8322 (the Nginx proxy), while OGX listen on port 8321.
+
+When an external client calls your application, Nginx inspects the incoming $http_authorization header.
+
+If the token matches your INBOUND_ACCESS_TOKEN secret exactly, Nginx forwards the payload over the local loopback interface (127.0.0.1:8321) into the OGX container. If it doesn't match, it drops the connection instantly with a 401 Unauthorized response.
+
+Now when you initialize your OpenAI client or make curl requests, you replace "fake" with your specific inbound secret.
+
 

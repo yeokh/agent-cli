@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: distribution-starter-secret
+  labels:
+    app: distribution-starter
+type: Opaque
+stringData:
+  # Upstream model key
+  OPENAI_API_KEY: "sk-or-v1-xxx"
+  # The secret token your client applications must use to access this proxy
+  INBOUND_ACCESS_TOKEN: "your-super-secure-custom-token-here"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ogx-model-config
+  labels:
+    app: distribution-starter
+data:
+  run.yaml: |
+    version: '2'
+    image_name: starter
+    apis:
+      - inference
+      - agents
+    providers:
+      inference:
+        - provider_id: openrouter-backend
+          provider_type: remote::openai
+          config:
+            url: "https://openrouter.ai/api/v1"
+            api_key: "${OPENAI_API_KEY}"
+    models:
+      - model_id: "meta-llama/llama-3.1-70b-instruct"
+        provider_id: openrouter-backend
+      - model_id: "anthropic/claude-sonnet-4.5"
+        provider_id: openrouter-backend
+      - model_id: "anthropic/claude-haiku-4.5"
+        provider_id: openrouter-backend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: distribution-starter
+  labels:
+    app: distribution-starter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: distribution-starter
+  template:
+    metadata:
+      labels:
+        app: distribution-starter
+    spec:
+      containers:
+      # Container 1: The OGX Engine (Isolated inside the pod network)
+      - name: distribution-starter
+        image: ogxai/distribution-starter:latest
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: OPENAI_API_KEY
+        - name: RUN_CONFIG_PATH
+          value: "/etc/ogx/run.yaml"
+        volumeMounts:
+        - name: config-volume
+          mountPath: "/etc/ogx"
+      
+      # Container 2: The Security Sidecar Guard (Validates your incoming secret)
+      - name: proxy-guard
+        image: registry.access.redhat.com/ubi9/nginx-122:latest
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            # Dynamically compile a lightweight Nginx config utilizing the Secret env var
+            echo "events {} http { server { listen 8322; default_type application/json; location / { if (\$http_authorization != \"Bearer \$ACCESS_TOKEN\") { return 401 '{\"error\": \"Unauthorized: Invalid or missing OGX access token.\"}'; } proxy_pass http://127.0.0.1:8321; } } }" > /tmp/nginx.conf
+            nginx -c /tmp/nginx.conf -g "daemon off;"
+        ports:
+        - containerPort: 8322
+          protocol: TCP
+        env:
+        - name: ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: INBOUND_ACCESS_TOKEN
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ogx-model-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: distribution-starter-service
+  labels:
+    app: distribution-starter
+spec:
+  ports:
+  - port: 8321
+    targetPort: 8322 # Traffic is sent to the Nginx guard, NOT directly to OGX
+  selector:
+    app: distribution-starter
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: distribution-starter-route
+  labels:
+    app: distribution-starter
+spec:
+  to:
+    kind: Service
+    name: distribution-starter-service
+  port:
+    targetPort: 8321
+  tls:
+    termination: edge
+
+

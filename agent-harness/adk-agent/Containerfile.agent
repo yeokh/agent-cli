@@ -6,11 +6,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY adk_agent.py .
+COPY entrypoint.sh .
 COPY templates/ templates/
 
 ENV AGENT_DIR=/app/agent \
     INPUT_DIR=/app/input \
     OUTPUT_DIR=/app/output \
+    JOBS_DIR=/app/sample-jobs \
     API_PROVIDER=anthropic \
     MODEL=claude-haiku-4-5 \
     MAX_TURNS=50 \

@@ -15,9 +15,10 @@ COPY adk_agent.py .
 COPY web_app.py .
 COPY templates/ templates/
 COPY entrypoint.sh .
+COPY agent-jobs/ sample-jobs/
 
 USER 0
-RUN mkdir -p /app/agent /app/input /app/output && \
+RUN mkdir -p /app/agent /app/input /app/output /app/sample-jobs && \
     chown -R 1001:0 /app && \
     chmod -R g=u /app && \
     chmod +x /app/entrypoint.sh
@@ -25,6 +26,7 @@ RUN mkdir -p /app/agent /app/input /app/output && \
 ENV AGENT_DIR=/app/agent \
     INPUT_DIR=/app/input \
     OUTPUT_DIR=/app/output \
+    JOBS_DIR=/app/sample-jobs \
     API_PROVIDER=anthropic \
     MODEL=claude-opus-4-5 \
     MAX_TURNS=50 \

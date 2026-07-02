@@ -1,4 +1,0 @@
-{
-  "result": "Fail",
-  "reason": "Hardcoded credentials found in variable definitions. Command injection risk detected due to unsafe use of shell/command with variable input. Sensitive key material is copied or stored with insecure permissions."
-}

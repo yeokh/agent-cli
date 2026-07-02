@@ -36,6 +36,8 @@ spec:
               value: "true"
             - name: SHELL_TIMEOUT
               value: "60"
+            - name: JOBS_DIR
+              value: "/app/sample-jobs"
           volumeMounts:
             - name: agent-volume
               mountPath: /app/agent

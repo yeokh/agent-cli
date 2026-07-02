@@ -89,17 +89,37 @@ AGENT_DIR=./agent INPUT_DIR=./input OUTPUT_DIR=./output python adk_agent.py
 
 Exits `0` on success, `1` on any error.  Logs go to stdout and `output/agent.log`.
 
-## Container (Headless)
+## Container
+
+The unified `Containerfile` supports both modes via `RUN_MODE`.  `Containerfile.agent` is a leaner headless-only alternative (no Flask/web assets).
 
 ```bash
-podman build -t adk-agent-headless -f Containerfile .
+# Build unified image (web + agent)
+podman build -t adk-agent -f Containerfile .
 
-podman run --rm \
+# Run as web UI
+podman run --rm -p 8080:8080 \
+  -e RUN_MODE=web \
   -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
   -v ./agent:/app/agent \
   -v ./input:/app/input \
   -v ./output:/app/output \
-  adk-agent-headless
+  adk-agent
+
+# Run headless
+podman run --rm \
+  -e RUN_MODE=agent \
+  -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+  -v ./agent:/app/agent \
+  -v ./input:/app/input \
+  -v ./output:/app/output \
+  adk-agent
+```
+
+Job packs baked into the image are available at `/app/sample-jobs` (the `JOBS_DIR` default).  Mount a host directory to override:
+
+```bash
+-v ./my-job-packs:/app/sample-jobs
 ```
 
 ## Environment Variables
@@ -114,6 +134,7 @@ podman run --rm \
 | `MODEL` | `claude-opus-4-5` | Model ID (as returned by the provider's /models endpoint) |
 | `MAX_TURNS` | `50` | Max agentic loop iterations |
 | `AGENT_DIR` / `INPUT_DIR` / `OUTPUT_DIR` | `./agent` etc. (web), `/app/...` (headless) | Folder paths |
+| `JOBS_DIR` | `./sample-jobs` (local), `/app/sample-jobs` (container) | Path to job-pack library used by the web UI |
 | `ALLOW_SHELL` | `true` | Set `false` to disable the `run_command` tool |
 | `SHELL_TIMEOUT` | `60` | Max seconds a single shell command may run |
 | `PORT` / `HOST` | `8081` / `0.0.0.0` | Web UI bind |
@@ -139,7 +160,11 @@ LiteLLM-supported model works without code changes.
   by `[tool_use]` / `[result]` / `[assistant]` / errors, with auto-scroll.
 - **Metrics** — after each run: duration, turns, input/output token totals,
   and output file count, shown in the header chip and the OUTPUT panel card.
-- **Job history** — last 20 runs persisted to `output/.job_history.json`,
+- **Job Packs** — browse and load pre-built job packs from `JOBS_DIR` via the
+  web UI (`GET /api/jobpacks`, `POST /api/jobpacks/load`).  Job packs are baked
+  into the container image at `/app/sample-jobs` and can be overridden by
+  mounting a volume or setting `JOBS_DIR`.
+- **Job history** — last 100 runs persisted to `.job_history.json`,
   available at `GET /api/jobs`.
 
 ## REST API
@@ -154,7 +179,8 @@ LiteLLM-supported model works without code changes.
 | `GET/POST /api/settings` | Max turns, shell, OpenAI-compatible base URL |
 | `POST /api/agent/run` · `POST /api/agent/reset` | Start / reset a run |
 | `GET /api/agent/status` · `GET /api/agent/logs` | Status + metrics / SSE log stream |
-| `GET /api/jobs` | Job history (last 20 runs) |
+| `GET /api/jobpacks` · `POST /api/jobpacks/load` | List job packs / load a pack into agent & input folders |
+| `GET /api/jobs` | Job history (last 100 runs) |
 
 ## Workshop Extension Points
 
@@ -179,16 +205,19 @@ LiteLLM-supported model works without code changes.
 ## Project Layout
 
 ```
-adk-agent-v2/
+adk-agent/
 ├── adk_agent.py         Core ADK agent logic — both entry points use this
 ├── web_app.py           Flask web server (REST API + SSE)
+├── entrypoint.sh        Switches between RUN_MODE=web and RUN_MODE=agent
 ├── templates/
 │   └── index.html       Single-page web UI (vanilla JS, no build step)
 ├── agent/
 │   └── instruction.md   Task instructions (required)
 ├── input/               Job payload files
 ├── output/              Agent results + agent.log
+├── sample-jobs/         Job-pack library (JOBS_DIR default); baked into the container image
 ├── requirements.txt
-├── Containerfile        Headless UBI9 container
+├── Containerfile        Unified UBI9 container (web + agent via RUN_MODE)
+├── Containerfile.agent  Lean headless-only container
 └── README.md
 ```
