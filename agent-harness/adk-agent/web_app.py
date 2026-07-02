@@ -22,6 +22,7 @@ Environment variables:
   MODEL                model id (default claude-opus-4-5)
   MAX_TURNS            max agentic loop iterations (default 50)
   AGENT_DIR / INPUT_DIR / OUTPUT_DIR   folder overrides
+  JOBS_DIR             path to job-pack library (default ../agent-jobs)
   PORT / HOST          web server bind (default 8080 / 0.0.0.0)
 """
 
@@ -47,6 +48,7 @@ import adk_agent
 AGENT_DIR = Path(os.environ.get("AGENT_DIR", "./agent")).resolve()
 INPUT_DIR = Path(os.environ.get("INPUT_DIR", "./input")).resolve()
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "./output")).resolve()
+JOBS_DIR = Path(os.environ.get("JOBS_DIR", "./sample-jobs")).resolve()
 PORT = int(os.environ.get("PORT", "8080"))
 HOST = os.environ.get("HOST", "0.0.0.0")
 
@@ -399,6 +401,97 @@ def api_upload(folder):
         return jsonify({"error": str(exc)}), 400
 
 
+# --- Routes: Job Packs --------------------------------------------------------
+#
+# Job packs live under JOBS_DIR.  A valid pack is any sub-directory that
+# contains at least agent/instruction.md.  The load endpoint copies the
+# pack's agent/ and input/ trees into the working AGENT_DIR / INPUT_DIR so
+# the agent can run without any browser upload.  Works identically whether
+# the packs come from a git clone, a container volume, or a baked-in layer.
+
+def _list_jobpacks() -> list[dict]:
+    """Return metadata for every valid job pack found under JOBS_DIR."""
+    packs = []
+    if not JOBS_DIR.is_dir():
+        return packs
+    for candidate in sorted(JOBS_DIR.iterdir()):
+        if not candidate.is_dir():
+            continue
+        instruction = candidate / "agent" / "instruction.md"
+        if not instruction.is_file():
+            continue
+        agent_files = list((candidate / "agent").rglob("*"))
+        input_files = list((candidate / "input").rglob("*")) if (candidate / "input").is_dir() else []
+        packs.append({
+            "name": candidate.name,
+            "agent_files": [f.name for f in agent_files if f.is_file()],
+            "input_files": [f.name for f in input_files if f.is_file()],
+        })
+    return packs
+
+
+@app.route("/api/jobpacks", methods=["GET"])
+def api_list_jobpacks():
+    """List all job packs available in JOBS_DIR."""
+    return jsonify({"packs": _list_jobpacks(), "jobs_dir": str(JOBS_DIR)})
+
+
+@app.route("/api/jobpacks/load", methods=["POST"])
+def api_load_jobpack():
+    """Copy a job pack's agent/ and input/ trees into the working directories.
+
+    Body (JSON):
+      pack   -- job pack name (directory name under JOBS_DIR)  [required]
+      clear  -- if true (default), clear AGENT_DIR and INPUT_DIR first
+      target -- "both" | "agent" | "input"  (default "both")
+    """
+    data = request.get_json(silent=True) or {}
+    pack_name = data.get("pack", "").strip()
+    if not pack_name:
+        return jsonify({"error": "Missing 'pack'"}), 400
+
+    pack_dir = (JOBS_DIR / pack_name).resolve()
+    if not str(pack_dir).startswith(str(JOBS_DIR.resolve())):
+        return jsonify({"error": "Path traversal denied"}), 400
+    if not pack_dir.is_dir():
+        return jsonify({"error": f"Job pack not found: {pack_name}"}), 404
+    if not (pack_dir / "agent" / "instruction.md").is_file():
+        return jsonify({"error": f"Pack missing agent/instruction.md: {pack_name}"}), 400
+
+    clear = data.get("clear", True)
+    target = data.get("target", "both")
+    copied: dict[str, list[str]] = {"agent": [], "input": []}
+
+    def _copy_tree(src: Path, dst: Path, label: str) -> None:
+        if clear:
+            for item in dst.iterdir():
+                if item.name in HIDDEN_FILES:
+                    continue
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
+        if not src.is_dir():
+            return
+        for src_file in src.rglob("*"):
+            if not src_file.is_file():
+                continue
+            rel = src_file.relative_to(src)
+            dst_file = dst / rel
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+            copied[label].append(str(rel))
+
+    if target in ("both", "agent"):
+        _copy_tree(pack_dir / "agent", AGENT_DIR, "agent")
+    if target in ("both", "input"):
+        _copy_tree(pack_dir / "input", INPUT_DIR, "input")
+
+    log.info("Loaded job pack '%s': %d agent, %d input files",
+             pack_name, len(copied["agent"]), len(copied["input"]))
+    return jsonify({"pack": pack_name, "copied": copied})
+
+
 @app.route("/api/file/<any('agent','input'):folder>/<path:filename>", methods=["DELETE"])
 def api_delete_file(folder, filename):
     try:
@@ -719,6 +812,7 @@ def main() -> None:
     print(f"  Agent    : {AGENT_DIR}")
     print(f"  Input    : {INPUT_DIR}")
     print(f"  Output   : {OUTPUT_DIR}")
+    print(f"  Jobs     : {JOBS_DIR}{'' if JOBS_DIR.is_dir() else ' (not found)'}")
     print("  ----------------------------------")
     missing = [
         env for prov, env in KEY_ENV_VARS.items()

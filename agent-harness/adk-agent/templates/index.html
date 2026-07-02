@@ -335,6 +335,10 @@
         <button class="small" data-newfile="input">New</button>
         <button class="small" data-clear="input">Clear</button>
       </div>
+      <div class="panel-head" id="jobpack-row" style="display:none;gap:4px;flex-wrap:wrap">
+        <select id="jobpack-select" style="flex:1;min-width:0;font-size:0.78rem"></select>
+        <button class="small" id="jobpack-load-btn" title="Copy job pack files into agent/ and input/">Load</button>
+      </div>
       <div class="file-list" id="files-input"></div>
     </section>
     <div class="divider" data-divider="1"></div>
@@ -1152,6 +1156,42 @@ $("upload-input").onchange = async () => {
   fail.forEach((r) => toast(r.reason?.message ?? "Upload failed", "error"));
   refreshLists();
 };
+
+// --- Job Pack loader ---------------------------------------------------------
+async function loadJobPacks() {
+  try {
+    const data = await api("/api/jobpacks");
+    const sel = $("jobpack-select");
+    sel.innerHTML = "";
+    if (!data.packs || !data.packs.length) return;
+    data.packs.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.name;
+      const inputCount = p.input_files.length;
+      opt.textContent = `${p.name}  (${p.agent_files.length} agent, ${inputCount} input)`;
+      sel.appendChild(opt);
+    });
+    $("jobpack-row").style.display = "flex";
+  } catch (_) { /* JOBS_DIR not available — hide silently */ }
+}
+
+$("jobpack-load-btn").onclick = async () => {
+  const pack = $("jobpack-select").value;
+  if (!pack) return;
+  if (!confirm(`Load job pack "${pack}"?\nThis will replace the current agent/ and input/ files.`)) return;
+  try {
+    const data = await api("/api/jobpacks/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pack, clear: true }),
+    });
+    const a = data.copied.agent.length, i = data.copied.input.length;
+    toast(`Loaded "${pack}": ${a} agent file${a !== 1 ? "s" : ""}, ${i} input file${i !== 1 ? "s" : ""}`);
+    refreshLists();
+  } catch (e) { toast(e.message, "error"); }
+};
+
+loadJobPacks();
 
 document.querySelectorAll("[data-newfile]").forEach((btn) => {
   btn.onclick = async () => {
