@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: adk-agent
-          image: quay.io/khyeo/adk-agent:v1
+          image: quay.io/kenghua_yeo/adk-agent:v1
           ports:
             - containerPort: 8080
               protocol: TCP

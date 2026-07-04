@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pi-ttyd
+  labels:
+    app: pi-ttyd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pi-ttyd
+  template:
+    metadata:
+      labels:
+        app: pi-ttyd
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        hostUsers: false
+      containers:
+        - name: pi-ttyd
+          image: quay.io/kenghua_yeo/pi-ttyd:v1
+          ports:
+            - containerPort: 7681
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: pi-ttyd-api-keys
+          env:
+            - name: TERM
+              value: xterm-256color
+            - name: HOME
+              value: /opt/app-root
+          volumeMounts:
+            - name: pi-agent-home
+              mountPath: /opt/app-root/.pi/agent
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 7681
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 7681
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: pi-agent-home
+          persistentVolumeClaim:
+            claimName: pi-ttyd-agent-pvc

@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# pi CLI developer container image — OpenShift Dev Spaces compatible
+#
+# Concept:
+#   Dev Spaces injects its own VS Code server sidecar and handles all
+#   browser routing/auth. This image is the *workspace* container — it just
+#   needs pi and dev tools. Users run `pi` from the VS Code integrated terminal.
+#
+# Base: quay.io/redhat-cop/devspaces-base already includes:
+#   git, curl, jq, vim, bash, zsh, ripgrep, fd, bat, gh-cli, buildah, podman
+#   Arbitrary-UID entrypoint, HOME=/home/user, WORKDIR=/projects
+#
+# Build:  podman build -t pi-devspaces:v1 -f Containerfile-devspaces .
+# Test:   podman run --rm -it -e ANTHROPIC_API_KEY=sk-ant-... pi-devspaces:v1 bash
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM quay.io/redhat-cop/devspaces-base:latest
+
+LABEL name="pi-devspaces" \
+      summary="pi AI coding agent CLI developer container for OpenShift Dev Spaces" \
+      description="Dev Spaces workspace image with the pi coding agent CLI pre-installed. Run 'pi' from the VS Code integrated terminal." \
+      io.k8s.description="pi AI coding agent developer container for OpenShift Dev Spaces" \
+      io.k8s.display-name="Pi Coding Agent Dev Spaces"
+
+# ── 1. Node.js 24 (devspaces-base is UBI9/ubi, uses yum) ─────────────────────
+# Download the official tarball to avoid repo dependency issues on UBI9
+ENV NODE_VERSION=24.1.0
+
+USER root
+
+RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+    | tar -xJ -C /usr/local --strip-components=1 \
+ && node --version \
+ && npm --version
+
+# ── 2. pi agent home directory ────────────────────────────────────────────────
+# Pre-create with group-write so any arbitrary UID (GID 0) can write to it.
+RUN mkdir -p /home/user/.pi/agent \
+ && chown -R 10001:0 /home/user \
+ && chmod -R g=u     /home/user
+
+# ── 3. Install pi CLI ─────────────────────────────────────────────────────────
+USER 10001
+
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
+ && npm cache clean --force
+
+# ── 4. Environment ────────────────────────────────────────────────────────────
+ENV HOME=/home/user \
+    TERM=xterm-256color \
+    WORK_DIR=/projects
+
+# ── 5. Persistent pi state ────────────────────────────────────────────────────
+# Dev Spaces mounts a PVC here automatically when volumeMounts is set in devfile
+VOLUME ["/home/user/.pi/agent"]
+
+# ── 6. Keep the container alive — Dev Spaces injects VS Code server separately ─
+WORKDIR /projects
+CMD ["tail", "-f", "/dev/null"]

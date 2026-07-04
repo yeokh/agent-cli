@@ -55,7 +55,7 @@ spec:
       - name: adk-agent
         # Replace with your actual image reference, e.g.:
         #   quay.io/<your-org>/adk-agent:latest
-        image: quay.io/khyeo/adk-agent:v1
+        image: quay.io/kenghua_yeo/adk-agent:v1
         envFrom:
         - secretRef:
             name: adk-agent-api-keys

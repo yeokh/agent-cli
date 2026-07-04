@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: goose
+  labels:
+    app: goose
+spec:
+  restartPolicy: Always
+  containers:
+    - name: goose
+      image: quay.io/kenghua_yeo/goose:v1
+      imagePullPolicy: Always
+      command: ["sleep", "infinity"]
+      env:
+        - name: GOOSE_DISABLE_KEYRING
+          value: "1"
+        - name: GOOSE_MODE
+          value: smart_approve
+        - name: GOOSE_TELEMETRY_OFF
+          value: "1"
+        # Optional: set provider via env instead of goose configure.
+        # Uncomment and create the goose-api-keys Secret (see README).
+        # - name: GOOSE_PROVIDER
+        #   value: openai
+        # - name: GOOSE_MODEL
+        #   value: gpt-4o
+        # - name: OPENAI_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: goose-api-keys
+        #       key: OPENAI_API_KEY
+      volumeMounts:
+        - name: goose-config
+          mountPath: /home/goose/.config/goose
+        - name: workspace
+          mountPath: /home/goose/workspace
+      resources:
+        requests:
+          cpu: 250m
+          memory: 512Mi
+        limits:
+          cpu: "2"
+          memory: 2Gi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+  volumes:
+    - name: goose-config
+      persistentVolumeClaim:
+        claimName: goose-config
+    - name: workspace
+      emptyDir: {}

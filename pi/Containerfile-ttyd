@@ -1,0 +1,90 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# pi cli + ttyd web terminal container image (OpenShift-compatible)
+# Build:  podman build -t pi-ttyd:v1 -f Containerfile-ttyd .
+# Run:    podman run --rm -p 7681:7681 \
+#           -e OPENAI_API_KEY=mykey \
+#           -v pi-agent-home:/opt/app-root/.pi/agent \
+#           pi-ttyd:v1
+# Access: http://localhost:7681
+#
+# OpenShift deployment notes:
+#   - Runs as uid 1001 (no root, no privileged SCC required)
+#   - Exposes port 7681 (unprivileged)
+#   - Set API key via Secret → env var in your Deployment/Job
+#   - Add --credential user:pass to the CMD for basic auth, or front with an
+#     OpenShift Route + OAuth proxy for proper authN/Z
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM registry.redhat.io/ubi9/nodejs-24-minimal
+
+# ── 1. System dependencies (as root) ─────────────────────────────────────────
+USER root
+
+RUN microdnf install -y gzip && \
+    microdnf clean all
+
+# ripgrep – used by pi's grep tool
+RUN curl -L -o /tmp/rg.tar.gz \
+    https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep-14.1.0-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/rg.tar.gz -C /tmp \
+ && cp /tmp/ripgrep-14.1.0-x86_64-unknown-linux-musl/rg /usr/local/bin/rg \
+ && chmod +x /usr/local/bin/rg \
+ && rm -rf /tmp/rg*
+
+# fd – used by pi's find tool
+RUN curl -L -o /tmp/fd.tar.gz \
+    https://github.com/sharkdp/fd/releases/download/v10.2.0/fd-v10.2.0-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/fd.tar.gz -C /tmp \
+ && cp /tmp/fd-v10.2.0-x86_64-unknown-linux-musl/fd /usr/local/bin/fd \
+ && chmod +x /usr/local/bin/fd \
+ && rm -rf /tmp/fd*
+
+# ttyd – static self-contained binary, no extra libs required
+RUN curl -L -o /usr/local/bin/ttyd \
+    https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
+ && chmod +x /usr/local/bin/ttyd
+
+# ── 2. Non-root user setup ────────────────────────────────────────────────────
+# Pre-create the pi agent home so a mounted volume inherits correct ownership.
+# /opt/app-root/.pi/agent  ← sessions, settings, extensions, skills, themes
+RUN mkdir -p /opt/app-root/.pi/agent && \
+    chown -R 1001:0 /opt/app-root/.pi && \
+    chmod -R g=u   /opt/app-root/.pi
+
+USER 1001
+WORKDIR /opt/app-root/src
+
+# ── 3. Install pi CLI ─────────────────────────────────────────────────────────
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
+    npm cache clean --force
+
+# ── 4. Environment ────────────────────────────────────────────────────────────
+ENV PATH="/opt/app-root/src/.npm-global/bin:/usr/local/bin:$PATH" \
+    TERM=xterm-256color \
+    HOME=/opt/app-root
+
+# ── 5. Persist pi state via a named volume ────────────────────────────────────
+# Mount this path to keep sessions, settings, extensions and trust decisions
+# across container restarts or re-deployments.
+#
+# podman / docker:
+#   -v pi-agent-home:/opt/app-root/.pi/agent
+#
+# OpenShift PVC example (in your Deployment spec):
+#   volumes:
+#     - name: pi-agent-home
+#       persistentVolumeClaim:
+#         claimName: pi-agent-pvc
+#   volumeMounts:
+#     - name: pi-agent-home
+#       mountPath: /opt/app-root/.pi/agent
+VOLUME ["/opt/app-root/.pi/agent"]
+
+# ── 6. Expose ttyd port ───────────────────────────────────────────────────────
+EXPOSE 7681
+
+# ── 7. Launch ttyd serving pi ─────────────────────────────────────────────────
+# --writable   : allow keyboard input (required for interactive TUI)
+# --once       : remove to allow multiple concurrent sessions
+# Replace "pi" with "bash" if you want a plain shell with pi available on PATH
+CMD ["ttyd", "--port", "7681", "--writable", "pi"]

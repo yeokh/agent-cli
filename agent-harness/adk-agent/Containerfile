@@ -15,7 +15,7 @@ COPY adk_agent.py .
 COPY web_app.py .
 COPY templates/ templates/
 COPY entrypoint.sh .
-COPY agent-jobs/ sample-jobs/
+COPY sample-jobs/ sample-jobs
 
 USER 0
 RUN mkdir -p /app/agent /app/input /app/output /app/sample-jobs && \
@@ -28,13 +28,13 @@ ENV AGENT_DIR=/app/agent \
     OUTPUT_DIR=/app/output \
     JOBS_DIR=/app/sample-jobs \
     API_PROVIDER=anthropic \
-    MODEL=claude-opus-4-5 \
+    MODEL=claude-haiku-4.5 \
     MAX_TURNS=50 \
     ALLOW_SHELL=true \
     SHELL_TIMEOUT=60 \
     PORT=8080 \
     HOST=0.0.0.0 \
-    RUN_MODE=agent
+    RUN_MODE=web
 
 VOLUME ["/app/agent", "/app/input", "/app/output"]
 

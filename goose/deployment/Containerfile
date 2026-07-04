@@ -1,0 +1,93 @@
+# Red Hat Option 2: goose package only (NOT goose-redhat)
+# https://access.redhat.com/articles/7142302
+#
+# Use goose as a generic agent with your own AI provider and API keys.
+# Switching providers (from the article):
+#   1. goose configure   — interactive setup
+#   2. export OPENAI_API_KEY=...  — bypass default provider via env vars
+#   3. goose info        — verify active provider
+#
+# --- Build (portable, UBI + EPEL goose RPM; no goose-redhat) ---
+#   podman build -t goose -f Containerfile .
+#
+# --- Build (article method: RHEL Extensions repo on a registered host) ---
+#   podman build -t goose -f Containerfile \
+#     --build-arg INSTALL_SOURCE=extensions \
+#     --build-arg RHEL_VERSION=9 \
+#     --volume /etc/pki/entitlement:/etc/pki/entitlement:ro \
+#     --volume /etc/rhsm:/etc/rhsm:ro .
+#
+# On bare RHEL before building with extensions:
+#   sudo subscription-manager register
+#   sudo subscription-manager repos --enable=rhel-9-for-$(arch)-extensions-rpms   # RHEL 9
+#   sudo subscription-manager repos --enable=rhel-10-for-$(arch)-extensions-rpms  # RHEL 10
+#   sudo dnf install -y goose    # installs goose only; do NOT install goose-redhat
+#
+# --- Run (OpenAI via env vars, per article) ---
+#   export OPENAI_API_KEY=<your_key>
+#   podman run --rm -it \
+#     -e OPENAI_API_KEY \
+#     -e GOOSE_PROVIDER=openai \
+#     -e GOOSE_MODEL=gpt-4o \
+#     -v goose-config:/home/goose/.config/goose \
+#     -v "$PWD:/home/goose/workspace:Z" \
+#     goose session
+#
+# --- One-time interactive setup ---
+#   podman run --rm -it \
+#     -v goose-config:/home/goose/.config/goose \
+#     goose configure
+
+ARG INSTALL_SOURCE=epel
+ARG RHEL_VERSION=9
+
+FROM registry.access.redhat.com/ubi${RHEL_VERSION}:latest
+
+ARG INSTALL_SOURCE
+ARG RHEL_VERSION
+
+RUN dnf install -y \
+    ca-certificates \
+    git \
+    python3 \
+    sudo \
+    && if [ "${INSTALL_SOURCE}" = "extensions" ]; then \
+      ARCH="$(uname -m)"; \
+      subscription-manager repos --enable="rhel-${RHEL_VERSION}-for-${ARCH}-extensions-rpms"; \
+      dnf install -y goose; \
+    else \
+      dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${RHEL_VERSION}.noarch.rpm"; \
+      dnf install -y goose; \
+    fi \
+    && dnf clean all
+
+# Option 2: goose only — fail the build if goose-redhat slipped in
+RUN rpm -q goose-redhat >/dev/null 2>&1 && \
+    echo "error: goose-redhat must not be installed for a generic provider setup" >&2 && \
+    exit 1 || true
+
+RUN useradd -m -u 1001 -G wheel goose \
+    && echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel-nopasswd
+
+RUN mkdir -p \
+    /home/goose/.config/goose/custom_providers \
+    /home/goose/workspace
+
+COPY config.yaml /home/goose/.config/goose/config.yaml
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+    && chown -R 1001:0 /home/goose \
+    && chmod -R g+rwX /home/goose
+
+ENV GOOSE_DISABLE_KEYRING=1 \
+    GOOSE_MODE=smart_approve \
+    GOOSE_TELEMETRY_OFF=1 \
+    HOME=/home/goose
+
+# UID 1001 is a convention; OpenShift runs the container as an arbitrary UID
+# from the namespace range. Group 0 + g+rwX above lets that UID write config/workspace.
+USER 1001
+WORKDIR /home/goose/workspace
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD []

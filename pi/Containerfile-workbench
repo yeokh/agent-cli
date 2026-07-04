@@ -1,0 +1,92 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# pi CLI workbench image — OpenShift AI (RHOAI/ODH) compatible
+#
+# Architecture:
+#   [Browser] → [NGINX :8080] → [ttyd :7681] → [pi CLI]
+#
+# Build:  podman build -t pi-workbench:v1 -f Containerfile-workbench .
+# Run:    podman run --rm -p 8080:8080 \
+#           -e ANTHROPIC_API_KEY=sk-ant-... \
+#           pi-workbench:v1
+# Access: http://localhost:8080/pi/
+#
+# RHOAI registration: see workbench-deployment/README.md
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM registry.redhat.io/ubi9/nodejs-24-minimal
+
+LABEL name="pi-workbench" \
+      summary="pi AI coding agent CLI served as an OpenShift AI Workbench" \
+      description="ttyd web terminal running the pi coding agent, fronted by nginx for RHOAI/ODH workbench compatibility" \
+      io.k8s.description="pi AI coding agent workbench for OpenShift AI" \
+      io.k8s.display-name="Pi Coding Agent Workbench" \
+      io.openshift.build.source-location="https://github.com/earendil-works/pi"
+
+# ── 1. System packages (as root) ─────────────────────────────────────────────
+USER root
+
+RUN microdnf install -y nginx gzip gettext && \
+    microdnf clean all
+
+# ripgrep – used by pi's grep tool
+RUN curl -L -o /tmp/rg.tar.gz \
+    https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep-14.1.0-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/rg.tar.gz -C /tmp \
+ && cp /tmp/ripgrep-14.1.0-x86_64-unknown-linux-musl/rg /usr/local/bin/rg \
+ && chmod +x /usr/local/bin/rg \
+ && rm -rf /tmp/rg*
+
+# fd – used by pi's find tool
+RUN curl -L -o /tmp/fd.tar.gz \
+    https://github.com/sharkdp/fd/releases/download/v10.2.0/fd-v10.2.0-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/fd.tar.gz -C /tmp \
+ && cp /tmp/fd-v10.2.0-x86_64-unknown-linux-musl/fd /usr/local/bin/fd \
+ && chmod +x /usr/local/bin/fd \
+ && rm -rf /tmp/fd*
+
+# ttyd – static self-contained binary, WebSocket terminal server
+RUN curl -L -o /usr/local/bin/ttyd \
+    https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
+ && chmod +x /usr/local/bin/ttyd
+
+# ── 2. Directory layout & permissions ────────────────────────────────────────
+# All persistent/config dirs owned by 1001:0 with group-write so any
+# arbitrary UID assigned by OpenShift (running in GID 0) can write to them.
+RUN mkdir -p \
+      /opt/app-root/etc \
+      /opt/app-root/src \
+      /opt/app-root/.pi/agent \
+ && chown -R 1001:0 /opt/app-root \
+ && chmod -R g=u    /opt/app-root \
+ && chmod g+w /etc/passwd /etc/group
+
+# ── 3. nginx config ───────────────────────────────────────────────────────────
+COPY --chown=1001:0 workbench/nginx.conf         /opt/app-root/etc/nginx.conf
+COPY --chown=1001:0 workbench/proxy.conf.template /opt/app-root/etc/proxy.conf.template
+
+# ── 4. Entrypoint script ──────────────────────────────────────────────────────
+COPY --chown=1001:0 workbench/run.sh /opt/app-root/bin/run.sh
+RUN chmod +x /opt/app-root/bin/run.sh
+
+# ── 5. Non-root user & pi CLI install ────────────────────────────────────────
+USER 1001
+WORKDIR /opt/app-root/src
+
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && \
+    npm cache clean --force
+
+# ── 6. Environment ────────────────────────────────────────────────────────────
+ENV PATH="/opt/app-root/bin:/usr/local/bin:$PATH" \
+    HOME=/opt/app-root \
+    TERM=xterm-256color \
+    NB_PREFIX=/pi
+
+# ── 7. Volumes ────────────────────────────────────────────────────────────────
+# pi sessions, settings, extensions — mount a PVC here to persist across restarts
+VOLUME ["/opt/app-root/.pi/agent"]
+
+# ── 8. Expose RHOAI-standard port ────────────────────────────────────────────
+EXPOSE 8080
+
+# ── 9. Start nginx + ttyd ────────────────────────────────────────────────────
+CMD ["/opt/app-root/bin/run.sh"]

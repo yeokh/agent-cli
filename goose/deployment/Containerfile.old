@@ -1,0 +1,45 @@
+# ==========================================
+# Stage 1: Build the Goose binary from source
+# ==========================================
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS builder
+
+# Install required build tools
+RUN microdnf install -y git cargo gcc make && \
+    microdnf clean all
+
+WORKDIR /build
+
+# Clone the open-source Goose repository
+# (Pins to main or a stable release as needed)
+RUN git clone https://github.com/block/goose.git . && \
+    cargo build --release
+
+# ==========================================
+# Stage 2: Create the minimal runtime image
+# ==========================================
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+# Install necessary runtime dependencies (Goose needs git/ssh for many developer tools)
+RUN microdnf install -y git openssh-clients shadow-utils && \
+    microdnf clean all
+
+# Create a non-root user for security compliance (UID 1001 for OpenShift/Podman compatibility)
+RUN useradd -u 1001 -m -s /bin/bash gooseuser
+USER 1001
+WORKDIR /home/gooseuser
+
+# Copy the compiled binary from the builder stage
+COPY --from=builder /build/target/release/goose /usr/local/bin/goose
+
+# Ensure Goose configuration directories exist inside the container
+RUN mkdir -p /home/gooseuser/.config/goose
+
+# Expose critical environment variables for your own AI Provider & API keys
+# These will be mapped or passed when running the container
+ENV GOOSE_PROVIDER="openai"
+ENV OPENAI_API_KEY=""
+ENV OPENAI_BASE_URL=""
+ENV GOOSE_MODEL=""
+
+# Set the default entrypoint to run goose
+CMD ["/usr/local/bin/goose"]

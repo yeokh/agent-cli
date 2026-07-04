@@ -1,0 +1,17 @@
+# Default goose configuration for container use.
+# Override at runtime with environment variables (highest precedence):
+#   GOOSE_PROVIDER, GOOSE_MODEL, OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
+#
+# See: https://block-goose.mintlify.app/guides/environment-variables
+
+GOOSE_MODE: smart_approve
+GOOSE_TELEMETRY_OFF: "1"
+
+extensions:
+  developer:
+    bundled: true
+    display_name: Developer
+    enabled: true
+    name: developer
+    timeout: 300
+    type: builtin

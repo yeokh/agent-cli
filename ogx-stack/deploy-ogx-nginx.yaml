@@ -55,6 +55,23 @@ spec:
       labels:
         app: distribution-starter
     spec:
+      initContainers:
+      - name: config-init
+        image: bhgedigital/envsubst:latest
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: OPENAI_API_KEY
+        command: ["/bin/sh", "-c"]
+        args:
+          - envsubst < /etc/ogx-template/run.yaml > /etc/ogx/run.yaml
+        volumeMounts:
+        - name: config-volume
+          mountPath: "/etc/ogx-template"
+        - name: config-processed
+          mountPath: "/etc/ogx"
       containers:
       # Container 1: The OGX Engine (Isolated inside the pod network)
       - name: distribution-starter
@@ -68,7 +85,7 @@ spec:
         - name: RUN_CONFIG_PATH
           value: "/etc/ogx/run.yaml"
         volumeMounts:
-        - name: config-volume
+        - name: config-processed
           mountPath: "/etc/ogx"
       
       # Container 2: The Security Sidecar Guard (Validates your incoming secret)
@@ -93,6 +110,8 @@ spec:
       - name: config-volume
         configMap:
           name: ogx-model-config
+      - name: config-processed
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

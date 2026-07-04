@@ -1,0 +1,31 @@
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  # Apply in the redhat-ods-applications namespace so RHOAI picks it up automatically.
+  # For ODH, use opendatahub namespace instead.
+  name: pi-workbench
+  namespace: redhat-ods-applications
+  labels:
+    app: pi-workbench
+    opendatahub.io/notebook-image: "true"
+  annotations:
+    opendatahub.io/notebook-image-url: "https://github.com/earendil-works/pi"
+    opendatahub.io/notebook-image-name: "Pi Coding Agent"
+    opendatahub.io/notebook-image-desc: >-
+      Pi AI coding agent CLI (pi.dev) accessible from the browser via ttyd web
+      terminal. Supports OpenAI, Anthropic, Google and OpenRouter providers.
+    opendatahub.io/notebook-image-order: "100"
+spec:
+  lookupPolicy:
+    local: true
+  tags:
+    - name: v1
+      annotations:
+        opendatahub.io/notebook-python-dependencies: "[]"
+        opendatahub.io/notebook-software: >-
+          [{"name":"pi","version":"latest"},{"name":"Node.js","version":"24"},{"name":"ttyd","version":"1.7.7"}]
+      from:
+        kind: DockerImage
+        name: quay.io/<your-org>/pi-workbench:v1
+      referencePolicy:
+        type: Source

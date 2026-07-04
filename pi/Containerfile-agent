@@ -34,9 +34,9 @@ USER 1001
 
 # WORKDIR /home/user
 WORKDIR /opt/app-root/src
-# RUN mkdir -p /home/user/agent /home/user/inbox /home/user/outbox \
-#     && chown -R 1001:1001 /home/user && chmod 777 /home/user/outbox
-RUN mkdir agent inbox outbox && chmod 777 outbox
+# RUN mkdir -p /home/user/agent /home/user/input /home/user/output \
+#     && chown -R 1001:1001 /home/user && chmod 777 /home/user/output
+RUN mkdir agent input output && chmod 777 output
 
 # ── 2. Install pi.dev agent packages ─────────────────────────────────────────
 RUN npm install -g @earendil-works/pi-coding-agent && \
@@ -46,6 +46,6 @@ RUN npm install -g @earendil-works/pi-coding-agent && \
 ENV PATH="/root/.local/bin:$PATH"
 
 # ── 4. Default cmd. Use entrypoint for production. ────────────────────────────
-CMD ["pi", "-p", "Your home folder /opt/app-root/src have 3 sub-folders: agent, inbox and outbox.  For instructions, please read the .md files in the agent folder. Process all files in the inbox folder. Output all results and activity logs in the outbox folder."]
+CMD ["pi", "-p", "Your home folder /opt/app-root/src have 3 sub-folders: agent, input and output.  For instructions, please read the .md files in the agent folder. Process all files in the input folder. Output all results and activity logs in the output folder."]
 
 #

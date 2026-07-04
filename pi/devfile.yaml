@@ -1,0 +1,74 @@
+schemaVersion: 2.2.0
+metadata:
+  name: pi-coding-agent
+  displayName: Pi Coding Agent
+  description: >-
+    AI coding agent workspace with the pi CLI pre-installed.
+    Open a terminal and run `pi` to start the agent.
+  tags:
+    - ai
+    - coding-agent
+    - pi
+
+attributes:
+  # Each workspace gets its own persistent volume for /projects
+  controller.devfile.io/storage-type: per-workspace
+
+components:
+  # ── Main workspace container ────────────────────────────────────────────────
+  - name: pi
+    container:
+      image: quay.io/<your-org>/pi-devspaces:v1
+      memoryRequest: 256Mi
+      memoryLimit: 1Gi
+      cpuRequest: 250m
+      cpuLimit: "1"
+      mountSources: true       # mounts /projects from the workspace PVC
+      sourceMapping: /projects # where Dev Spaces mounts the cloned repo
+      env:
+        # ── LLM provider keys ─────────────────────────────────────────────────
+        # Option A (recommended): set these in Dev Spaces UI →
+        #   User Menu → User Preferences → Environment Variables
+        # Option B: create the secret and reference it below via envFrom
+        - name: ANTHROPIC_API_KEY
+          value: ""
+        - name: OPENAI_API_KEY
+          value: ""
+        - name: OPENROUTER_API_KEY
+          value: ""
+        - name: GEMINI_API_KEY
+          value: ""
+        # ── Shell / terminal settings ─────────────────────────────────────────
+        - name: SHELL
+          value: /bin/bash
+        - name: TERM
+          value: xterm-256color
+      volumeMounts:
+        # Persist pi sessions, settings, extensions across workspace restarts
+        - name: pi-agent-home
+          path: /home/user/.pi/agent
+
+  # ── Persistent volume for pi agent state ────────────────────────────────────
+  - name: pi-agent-home
+    volume:
+      size: 2Gi
+
+commands:
+  # ── Convenience commands available in Dev Spaces UI ─────────────────────────
+  - id: start-pi
+    exec:
+      label: "Start pi agent"
+      component: pi
+      workingDir: /projects
+      commandLine: pi
+      group:
+        kind: run
+        isDefault: true
+
+  - id: pi-help
+    exec:
+      label: "Show pi help"
+      component: pi
+      commandLine: pi --help
+      group:
+        kind: run

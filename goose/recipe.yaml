@@ -1,0 +1,68 @@
+version: 1.0.0
+title: Models Endpoint Helper
+description: A reusable assistant workflow for clarifying and handling a user’s request related to a `/models` path. It helps interpret what the user wants and guides next steps for retrieving, listing, or using model information.
+instructions: |-
+  Confirm the user’s intent for the `/models` request (e.g., whether they want available models, metadata, configuration, or guidance on how to use models). Ask any key missing details such as environment, desired output format, constraints (e.g., filtering/selection), and whether they want a list, a comparison, or specific model guidance.
+
+  Then provide the requested result or a structured plan to obtain it. If an output format is explicitly requested, follow that format exactly (e.g., valid JSON) and ensure the response keys/fields match the requested schema. If non-standard tools or systems are required for the task, call them out explicitly as part of the instructions.
+extensions:
+- type: platform
+  name: Extension Manager
+  description: Enable extension management tools for discovering, enabling, and disabling extensions
+  display_name: Extension Manager
+  bundled: true
+  available_tools: []
+- type: platform
+  name: summon
+  description: Load knowledge and delegate tasks to subagents
+  display_name: Summon
+  bundled: true
+  available_tools: []
+- type: platform
+  name: apps
+  description: Create and manage custom Goose apps through chat. Apps are HTML/CSS/JavaScript and run in sandboxed windows.
+  display_name: Apps
+  bundled: true
+  available_tools: []
+- type: platform
+  name: developer
+  description: Write and edit files, and execute shell commands
+  display_name: Developer
+  bundled: true
+  available_tools: []
+- type: platform
+  name: tom
+  description: Inject custom context into every turn via GOOSE_MOIM_MESSAGE_TEXT and GOOSE_MOIM_MESSAGE_FILE environment variables
+  display_name: Top Of Mind
+  bundled: true
+  available_tools: []
+- type: platform
+  name: skills
+  description: Discover and provide skill instructions from filesystem and builtins
+  display_name: Skills
+  bundled: true
+  available_tools: []
+- type: platform
+  name: analyze
+  description: 'Analyze code structure with tree-sitter: directory overviews, file details, symbol call graphs'
+  display_name: Analyze
+  bundled: true
+  available_tools: []
+- type: platform
+  name: todo
+  description: Enable a todo list for goose so it can keep track of what it is doing
+  display_name: Todo
+  bundled: true
+  available_tools: []
+settings:
+  goose_provider: openrouter
+  goose_model: openai/gpt-5.4-nano
+  temperature: 0.0
+activities:
+- List available models
+- Show model metadata
+- Recommend a model
+- Export model info JSON
+- Validate request parameters
+author:
+  contact: root
