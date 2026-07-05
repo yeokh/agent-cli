@@ -1,0 +1,41 @@
+FROM registry.access.redhat.com/ubi9/python-312
+
+LABEL io.k8s.display-name="Pydantic Assistant" \
+      io.k8s.description="Interactive multi-turn AI chat assistant built on Pydantic AI and Flask" \
+      io.openshift.expose-services="8081:http" \
+      io.openshift.tags="python,pydantic-ai,chat,ai-assistant"
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY README.md .
+COPY chat_agent.py .
+COPY web_app.py .
+COPY templates/ templates/
+
+USER 0
+RUN mkdir -p /app/agent /app/input /app/output && \
+    chown -R 1001:0 /app && \
+    chmod -R g=u /app
+
+ENV AGENT_DIR=/app/agent \
+    INPUT_DIR=/app/input \
+    OUTPUT_DIR=/app/output \
+    API_PROVIDER=anthropic \
+    MODEL=claude-opus-4-5 \
+    MAX_TURNS=50 \
+    MAX_OUTPUT_TOKENS=16384 \
+    ALLOW_SHELL=true \
+    SHELL_TIMEOUT=60 \
+    PORT=8081 \
+    HOST=0.0.0.0
+
+VOLUME ["/app/agent", "/app/input", "/app/output"]
+
+EXPOSE 8081
+
+USER 1001
+
+CMD ["python", "web_app.py"]

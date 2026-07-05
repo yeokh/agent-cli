@@ -1,0 +1,19 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: pydantic-assistant-oauth
+  labels:
+    app: pydantic-assistant
+    variant: oauth
+spec:
+  to:
+    kind: Service
+    name: pydantic-assistant-oauth
+    weight: 100
+  port:
+    targetPort: oauth-proxy
+  tls:
+    # reencrypt: OpenShift Router terminates the client TLS, then re-encrypts
+    # the connection to the OAuth proxy pod using the cluster CA-signed cert.
+    termination: reencrypt
+    insecureEdgeTerminationPolicy: Redirect
