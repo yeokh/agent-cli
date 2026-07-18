@@ -1,0 +1,72 @@
+---
+# Persistent storage for project source files (read-write)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opencode-workspace-pvc
+  labels:
+    app: opencode-web
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Persistent storage for opencode configuration and installed plugins
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opencode-config-pvc
+  labels:
+    app: opencode-web
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Persistent storage for opencode session DB, auth tokens, and snapshots
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opencode-data-pvc
+  labels:
+    app: opencode-web
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Read-only volume for agent instruction files (.md / AGENTS.md)
+# Populate this PVC externally (e.g. via an init container, git-sync, or
+# a ConfigMap projection) and mount it read-only in the deployment.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opencode-agent-pvc
+  labels:
+    app: opencode-web
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 512Mi
+---
+# Read-only volume for Cursor skill definitions
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opencode-skills-pvc
+  labels:
+    app: opencode-web
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 512Mi

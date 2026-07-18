@@ -1,0 +1,113 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Goose ACP Web UI container image (OpenShift-compatible)
+# Flask web frontend that drives `goose acp` over JSON-RPC stdio.
+#
+# Build (run from the goose/ directory):
+#   export IMAGE=quay.io/kenghua_yeo/goose-acpweb:v1
+#   podman build -t "${IMAGE}" -f deployment/Containerfile-acpweb .
+#   podman push "${IMAGE}"
+#
+# Run locally with podman volumes:
+#   podman volume create goose-config
+#   podman volume create goose-workspace
+#   podman run --rm -p 8082:8082 \
+#     -e OPENAI_API_KEY=mykey \
+#     -e GOOSE_PROVIDER=openai \
+#     -e GOOSE_MODEL=gpt-4o \
+#     -v goose-config:/home/goose/.config/goose \
+#     -v goose-workspace:/home/goose/workspace \
+#     "${IMAGE}"
+#   Open http://localhost:8082
+#
+# OpenShift deployment notes:
+#   - Runs as uid 1001 (no root, no privileged SCC required)
+#   - Exposes port 8082 (unprivileged)
+#   - Set API keys via Secret → env vars in your Deployment spec
+#   - Mount PVCs at /home/goose/.config/goose and /home/goose/workspace
+# ─────────────────────────────────────────────────────────────────────────────
+
+ARG RHEL_VERSION=9
+
+FROM registry.access.redhat.com/ubi${RHEL_VERSION}:latest
+
+ARG RHEL_VERSION
+
+# ── 1. System dependencies + goose ───────────────────────────────────────────
+# Install the upstream `goose` package from EPEL for full provider support
+# (OpenAI, Anthropic, OpenRouter, Google, Ollama, Azure, Bedrock, …).
+# Do NOT install goose-redhat — it is a limited Red Hat variant tied to
+# specific providers.  EPEL `goose` is the full upstream release.
+RUN dnf install -y \
+    ca-certificates \
+    git \
+    python3 \
+    python3-pip \
+    "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${RHEL_VERSION}.noarch.rpm" \
+    && dnf install -y goose \
+    && dnf clean all
+
+# Guard: abort the build if goose-redhat was accidentally pulled in as a dep.
+# (rpm -q exits 0 only when the package IS installed — that is the failure case.)
+RUN ! rpm -q goose-redhat >/dev/null 2>&1 || \
+    { echo "ERROR: goose-redhat must not be installed; use the EPEL goose package." >&2; exit 1; }
+
+# ── 2. Python web UI dependencies ─────────────────────────────────────────────
+COPY requirements.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# ── 3. Non-root user + directory setup ───────────────────────────────────────
+# No sudo needed — this is a web app container, not an interactive shell.
+RUN useradd -m -u 1001 goose
+
+RUN mkdir -p \
+    /app/templates \
+    /home/goose/.config/goose/custom_providers \
+    /home/goose/workspace
+
+# ── 4. Application files ──────────────────────────────────────────────────────
+COPY acp-web.py        /app/acp-web.py
+COPY templates/        /app/templates/
+
+# ── 5. Goose config and entrypoint ────────────────────────────────────────────
+COPY deployment/config.yaml            /home/goose/.config/goose/config.yaml
+COPY deployment/entrypoint-acpweb.sh   /usr/local/bin/entrypoint-acpweb.sh
+
+RUN chmod +x /usr/local/bin/entrypoint-acpweb.sh \
+    && chown -R 1001:0 /home/goose /app \
+    && chmod -R g+rwX  /home/goose /app
+
+# ── 6. Environment ────────────────────────────────────────────────────────────
+# API keys and provider settings are intentionally NOT set here.
+# Provide them at runtime via env vars or an OpenShift Secret:
+#   GOOSE_PROVIDER   — e.g. openai, anthropic, google
+#   GOOSE_MODEL      — e.g. gpt-4o, claude-sonnet-4-5
+#   OPENAI_API_KEY   — or ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
+ENV GOOSE_DISABLE_KEYRING=1 \
+    GOOSE_MODE=smart_approve \
+    GOOSE_TELEMETRY_OFF=1 \
+    HOME=/home/goose \
+    PORT=8082
+
+# ── 7. Declare volume mount points ───────────────────────────────────────────
+# Mount these to persist goose config and workspace across restarts.
+#
+# podman / docker:
+#   -v goose-config:/home/goose/.config/goose
+#   -v goose-workspace:/home/goose/workspace
+#
+# OpenShift PVC (in your Deployment spec):
+#   volumeMounts:
+#     - name: goose-config
+#       mountPath: /home/goose/.config/goose
+#     - name: goose-workspace
+#       mountPath: /home/goose/workspace
+VOLUME ["/home/goose/.config/goose", "/home/goose/workspace"]
+
+# UID 1001 is a convention; OpenShift runs as an arbitrary UID from the
+# namespace range. Group 0 + g+rwX above lets that UID write to these dirs.
+USER 1001
+WORKDIR /home/goose/workspace
+
+EXPOSE 8082
+
+ENTRYPOINT ["/usr/local/bin/entrypoint-acpweb.sh"]

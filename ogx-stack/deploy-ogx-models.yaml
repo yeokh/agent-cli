@@ -11,7 +11,6 @@ data:
     image_name: starter
     apis:
       - inference
-      - agents
     providers:
       inference:
         - provider_id: openrouter-backend
@@ -25,28 +24,22 @@ data:
             api_key: "${ANTHROPIC_API_KEY}"
     models:
       # --- OpenRouter Fleet ---
-      - model_id: "meta-llama/llama-3.3-70b"
+      - model_id: "deepseek/deepseek-r1"
+        provider_id: openrouter-backend
+      - model_id: "anthropic/claude-haiku-4.5"
+        provider_id: openrouter-backend
+      - model_id: "openai/gpt-5.4-nano"
+        provider_id: openrouter-backend
+      - model_id: "openai/gpt-5-mini"
+        provider_id: openrouter-backend
+      - model_id: "ibm-granite/granite-4.1-8b"
         provider_id: openrouter-backend
       
       # --- Native Anthropic Fleet ---
       # model_id is what your apps will call; provider_model_id is what Anthropic expects
-      - model_id: "claude-3-5-sonnet"
+      - model_id: "claude-haiku-4.5"
         provider_id: anthropic-backend
-        provider_model_id: "claude-3-5-sonnet-latest"
-      - model_id: "claude-3-haiku"
-        provider_id: anthropic-backend
-        provider_model_id: "claude-3-haiku-20240307"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: distribution-starter-secret
-  labels:
-    app: distribution-starter
-type: Opaque
-stringData:
-  OPENAI_API_KEY: "sk-or-v1-xxx"
-  ANTHROPIC_API_KEY: "sk-ant-xxx" # Add your real Anthropic key here
+        provider_model_id: "claude-haiku-4.5"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -92,6 +85,7 @@ spec:
         ports:
         - containerPort: 8321
           protocol: TCP
+        command: ["ogx", "run", "--insecure", "/etc/ogx/run.yaml"]
         env:
         - name: OPENAI_API_KEY
           valueFrom:

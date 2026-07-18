@@ -1,0 +1,15 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: goose-ttyd
+  labels:
+    app: goose-ttyd
+spec:
+  to:
+    kind: Service
+    name: goose-ttyd
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

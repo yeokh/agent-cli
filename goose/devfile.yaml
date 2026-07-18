@@ -1,0 +1,126 @@
+schemaVersion: 2.2.2
+metadata:
+  name: goose-agent
+  displayName: Goose AI Agent
+  description: >
+    Goose AI coding agent running on OpenShift DevSpaces.
+    Built on UDI ubi9 with goose installed from the RHEL 9 Extensions repo.
+    Provider and API keys are injected at runtime via environment variables
+    or an OpenShift Secret — nothing is baked into the image.
+  tags:
+    - AI
+    - Agent
+    - Goose
+    - Python
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Before opening this workspace:
+#
+#   1. Build and push the custom image (once, and whenever you upgrade goose):
+#        podman build \
+#          -t quay.io/<your-org>/goose-devspaces:latest \
+#          -f goose/deployment/Containerfile-devspaces \
+#          --volume /etc/pki/entitlement:/etc/pki/entitlement:ro \
+#          --volume /etc/rhsm:/etc/rhsm:ro \
+#          goose/deployment/
+#        podman push quay.io/<your-org>/goose-devspaces:latest
+#
+#   2. Replace the image reference below with your quay.io repo.
+#
+#   3. Supply API keys via an OpenShift Secret in the DevSpaces namespace:
+#        oc create secret generic goose-api-keys \
+#          --from-literal=GOOSE_PROVIDER=openai \
+#          --from-literal=GOOSE_MODEL=gpt-4o \
+#          --from-literal=OPENAI_API_KEY=sk-...
+#      Then uncomment the secretKeyRef env blocks in the container below.
+#
+#   4. Open the workspace via the DevSpaces dashboard or:
+#        https://<devspaces-host>/dashboard/#/load-factory?url=<repo-url>
+# ─────────────────────────────────────────────────────────────────────────────
+
+components:
+  - name: goose
+    container:
+      # Replace with your image after building from Containerfile-devspaces
+      image: quay.io/devfile/universal-developer-image:ubi8-latest
+      memoryLimit: 2Gi
+      memoryRequest: 512Mi
+      cpuLimit: "2"
+      cpuRequest: 200m
+      mountSources: true
+      volumeMounts:
+        - name: goose-config
+          path: /home/user/.config/goose
+      env:
+        - name: GOOSE_DISABLE_KEYRING
+          value: "1"
+        - name: GOOSE_MODE
+          value: smart_approve
+        - name: GOOSE_TELEMETRY_OFF
+          value: "1"
+        # ── Provider / model ──────────────────────────────────────────────────
+        # Option A: hard-code for development (not recommended for production)
+        # - name: GOOSE_PROVIDER
+        #   value: openai
+        # - name: GOOSE_MODEL
+        #   value: gpt-4o
+        #
+        # Option B (recommended): source from an OpenShift Secret
+        #   oc create secret generic goose-api-keys \
+        #     --from-literal=GOOSE_PROVIDER=openai \
+        #     --from-literal=GOOSE_MODEL=gpt-4o \
+        #     --from-literal=OPENAI_API_KEY=sk-...
+        # - name: GOOSE_PROVIDER
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: goose-api-keys
+        #       key: GOOSE_PROVIDER
+        # - name: GOOSE_MODEL
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: goose-api-keys
+        #       key: GOOSE_MODEL
+        # - name: OPENAI_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: goose-api-keys
+        #       key: OPENAI_API_KEY
+
+  # Persistent volume: survives workspace restarts and image rebuilds.
+  # Stores provider config, secrets.yaml, sessions, and custom providers.
+  - name: goose-config
+    volume:
+      size: 1Gi
+
+commands:
+  # ── First-time setup ───────────────────────────────────────────────────────
+  - id: goose-configure
+    exec:
+      label: "1. Configure Goose (first-time provider & key setup)"
+      component: goose
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "goose configure"
+      group:
+        kind: build
+        isDefault: false
+
+  # ── Daily use ──────────────────────────────────────────────────────────────
+  - id: goose-session
+    exec:
+      label: "2. Start Goose Session"
+      component: goose
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "goose session"
+      group:
+        kind: run
+        isDefault: true
+
+  - id: goose-info
+    exec:
+      label: "Goose Info (verify active provider)"
+      component: goose
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "goose info"
+      group:
+        kind: run
+        isDefault: false

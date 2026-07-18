@@ -53,6 +53,8 @@ $ oc apply -f deploy-ogx.yaml
 $ oc get services >> internal fqdn end-point (only from within OpenShift) 
 $ oc get routes   >> external fqdn end-point
 
+$ oc delete secret,pvc,deploy,route,svc --all -n kenghua-yeo-dev >> to clean up
+
 $ curl -s https://distribution-starter-route-aa-ogx-stack.apps.ocp.b7785.sandbox5220.opentlc.com/v1/chat/completions \
   -H "Content-Type: application/json"   -H "Authorization: Bearer fake" \
   -d '{

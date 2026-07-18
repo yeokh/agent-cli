@@ -1,0 +1,26 @@
+$ oc apply -f the secret and deployment
+$ oc get routes
+
+$ curl https://distribution-starter-route-kenghua-yeo-dev.apps.rm3.7wse.p1.openshiftapps.com/v1/models
+
+Here's a simple test using one model from each provider...
+
+OpenRouter (gpt-5-mini):
+$ curl -s https://distribution-starter-route-kenghua-yeo-dev.apps.rm3.7wse.p1.openshiftapps.com/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -d '{
+      "model": "openrouter-backend/gpt-5-mini",
+      "messages": [{"role": "user", "content": "My name is John. Greet me one sentence."}]
+    }'
+
+Anthropic (claude-haiku-4-5-20251001):
+$ curl -s https://distribution-starter-route-kenghua-yeo-dev.apps.rm3.7wse.p1.openshiftapps.com/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -d '{
+      "model": "anthropic-backend/claude-haiku-4-5-20251001",
+      "messages": [{"role": "user", "content": "My name is John. Greet me in one sentence."}]
+    }' | python3 -m json.tool
+
+The model ID format is <provider_id>/<provider_resource_id> as shown in the /v1/models response.
+
+

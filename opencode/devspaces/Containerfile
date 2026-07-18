@@ -1,0 +1,15 @@
+FROM registry.redhat.io/devspaces/udi-rhel8:latest
+
+USER root
+
+# Install opencode binary and place it on the system PATH
+RUN curl -fsSL https://opencode.ai/install | OPENCODE_VERSION=1.15.13 bash && \
+    cp /home/user/.opencode/bin/opencode /usr/local/bin/opencode && \
+    chmod 755 /usr/local/bin/opencode
+
+# Install Python libraries for document generation
+RUN pip3 install --no-cache-dir python-pptx python-docx
+
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
+
+USER 1001

@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goose-acpweb
+  labels:
+    app: goose-acpweb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goose-acpweb
+  template:
+    metadata:
+      labels:
+        app: goose-acpweb
+    spec:
+      containers:
+        - name: goose-acpweb
+          image: quay.io/kenghua_yeo/goose-acpweb:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8082"
+            - name: GOOSE_DISABLE_KEYRING
+              value: "1"
+            - name: GOOSE_MODE
+              value: smart_approve
+            - name: GOOSE_TELEMETRY_OFF
+              value: "1"
+            # Provider and API keys sourced from Secret.
+            # Create the secret first:
+            #   oc create secret generic goose-acpweb-api-keys \
+            #     --from-literal=GOOSE_PROVIDER=openai \
+            #     --from-literal=GOOSE_MODEL=gpt-4o \
+            #     --from-literal=OPENAI_API_KEY=sk-...
+            - name: GOOSE_PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: goose-acpweb-api-keys
+                  key: GOOSE_PROVIDER
+            - name: GOOSE_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: goose-acpweb-api-keys
+                  key: GOOSE_MODEL
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: goose-acpweb-api-keys
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: goose-acpweb-api-keys
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: goose-acpweb-api-keys
+                  key: GOOGLE_API_KEY
+                  optional: true
+          volumeMounts:
+            - name: goose-config
+              mountPath: /home/goose/.config/goose
+            - name: goose-workspace
+              mountPath: /home/goose/workspace
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: 8082
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: goose-config
+          persistentVolumeClaim:
+            claimName: goose-acpweb-config
+        - name: goose-workspace
+          persistentVolumeClaim:
+            claimName: goose-acpweb-workspace

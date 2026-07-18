@@ -1,0 +1,42 @@
+schemaVersion: 2.2.0
+metadata:
+  name: opencode-devspaces
+  displayName: OpenCode Dev Spaces
+  description: >
+    OpenShift Dev Spaces workspace with the OpenCode AI coding assistant,
+    built on the Universal Developer Image (UDI) with Node.js, Python, Java,
+    Go, PHP, .NET, and common CLI tools pre-installed.
+  version: 1.0.0
+  tags:
+    - opencode
+    - ai
+    - python
+    - nodejs
+    - java
+    - go
+
+attributes:
+  controller.devfile.io/storage-type: per-workspace
+
+components:
+  - name: dev
+    container:
+      image: quay.io/njajodia/devspaces-opencode:latest
+      memoryLimit: 6Gi
+      memoryRequest: 512Mi
+      cpuLimit: "4"
+      cpuRequest: 500m
+      mountSources: true
+      sourceMapping: /projects
+      env:
+        - name: NODE_TLS_REJECT_UNAUTHORIZED
+          value: "0"
+      volumeMounts:
+        - name: user-home
+          path: /home/user
+    attributes:
+      controller.devfile.io/merge-contribution: true
+
+volumes:
+  - name: user-home
+    size: 10Gi

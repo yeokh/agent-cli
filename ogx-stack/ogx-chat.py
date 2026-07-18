@@ -1,12 +1,15 @@
+import os
 from openai import OpenAI
 
-# openai_url = "http://127.0.0.1:8321/v1"
-openai_url = "https://distribution-starter-route-aa-ogx-stack.apps.ocp.b7785.sandbox5220.opentlc.com/v1"
-client = OpenAI(base_url=openai_url, api_key="fake")
+# Read OGX_HOST, fallback to default if not set
+ogx_host = os.environ.get("OGX_HOST", "http://127.0.0.1:8321")
 
-# MODEL = "openai/anthropic/claude-haiku-4.5"
-MODEL = "openai/openai/gpt-5-nano"
-# MODEL = "openai/openai/gpt-4o-mini"
+# Construct the base URL dynamically
+client = OpenAI(base_url=f"{ogx_host}/v1", api_key="fake")
+
+#MODEL = "anthropic/claude-haiku-4.5"
+#MODEL = "openai/gpt-5-nano"
+MODEL = "openai/gpt-5-mini"
 
 history = []
 

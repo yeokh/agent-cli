@@ -378,11 +378,79 @@ Confirm cluster egress allows HTTPS to your provider. Check corporate proxies an
 
 Expected on OpenShift — the container runs as an arbitrary UID without elevated privileges. Most goose developer tasks work without sudo.
 
+## ttyd Web Terminal Image
+
+`Containerfile-ttyd` builds a variant of the goose image that exposes a browser-based terminal via [ttyd](https://github.com/tsl0922/ttyd). Instead of connecting with `oc rsh`, you open a URL and get a `goose session` directly in the browser.
+
+### Build and run locally
+
+```bash
+export IMAGE=goose-ttyd:v1
+
+podman build -t "${IMAGE}" -f Containerfile-ttyd .
+
+podman volume create goose-config
+podman volume create goose-workspace
+
+podman run --rm -p 7681:7681 \
+  -e OPENAI_API_KEY=mykey \
+  -e GOOSE_PROVIDER=openai \
+  -e GOOSE_MODEL=gpt-4o \
+  -v goose-config:/home/goose/.config/goose \
+  -v goose-workspace:/home/goose/workspace \
+  "${IMAGE}"
+```
+
+Open http://localhost:7681 in your browser to start a goose session.
+
+### Differences from the base image
+
+| Aspect | `Containerfile` | `Containerfile-ttyd` |
+|--------|----------------|----------------------|
+| Entry point | `entrypoint.sh` → `goose` | `ttyd` → `goose session` |
+| Access method | `oc rsh` / `podman exec` | Browser at `:7681` |
+| Extra binary | — | `ttyd` 1.7.7 static binary |
+| Volumes | `goose-config` | `goose-config`, `goose-workspace` |
+| Port | none | 7681 |
+
+### OpenShift deployment notes
+
+- Runs as uid 1001; no privileged SCC required.
+- Expose port 7681 via a Service and Route.
+- For authentication, add `--credential user:pass` to the `CMD` for basic auth, or front the Route with an OAuth proxy.
+- For persistent storage, mount PVCs at `/home/goose/.config/goose` and `/home/goose/workspace`.
+- To allow multiple concurrent browser sessions, remove `--once` (it is not set by default in the current `CMD`).
+
+### Use a plain shell instead
+
+To get a bash prompt (with `goose` on `PATH`) rather than launching directly into `goose session`, override the command at runtime:
+
+```bash
+podman run --rm -p 7681:7681 \
+  -e OPENAI_API_KEY=mykey \
+  -v goose-config:/home/goose/.config/goose \
+  goose-ttyd:v1 \
+  ttyd --port 7681 --writable bash
+```
+
+
+podman run --rm -p 7681:7681 -e GOOSE_PROVIDER=openai -e GOOSE_MODEL=gpt-5.4-nano \
+  -v goose-config:/home/goose/.config/goose   -v goose-workspace:/home/goose/workspace \
+       quay.io/kenghua_yeo/goose-ttyd:v1 \
+       ttyd --port 7681 --writable /bin/bash
+
+# export OPENAI_API_KEY=sk-proj-o-xxx
+# goose configure
+# goose 
+  /model gpt-5.4-nano 
+
+
 ## File reference
 
 | File | Purpose |
 |------|---------|
 | `Containerfile` | Image build definition (UBI 9 + EPEL `goose` RPM) |
+| `Containerfile-ttyd` | Variant with ttyd web terminal frontend on port 7681 |
 | `config.yaml` | Default extensions baked into the image |
 | `entrypoint.sh` | Sets `GOOSE_DISABLE_KEYRING`, creates config dirs, forwards args to `goose` |
 | `openshift/pvc.yaml` | Persistent volume for goose configuration |

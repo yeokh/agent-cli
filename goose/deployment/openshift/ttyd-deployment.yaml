@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goose-ttyd
+  labels:
+    app: goose-ttyd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goose-ttyd
+  template:
+    metadata:
+      labels:
+        app: goose-ttyd
+    spec:
+      containers:
+        - name: goose-ttyd
+          image: quay.io/kenghua_yeo/goose-ttyd:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 7681
+              protocol: TCP
+          env:
+            - name: GOOSE_DISABLE_KEYRING
+              value: "1"
+            - name: GOOSE_MODE
+              value: smart_approve
+            - name: GOOSE_TELEMETRY_OFF
+              value: "1"
+            # Provider and API keys sourced from Secret.
+            # Create the secret first:
+            #   oc create secret generic goose-ttyd-api-keys \
+            #     --from-literal=GOOSE_PROVIDER=openai \
+            #     --from-literal=GOOSE_MODEL=gpt-4o \
+            #     --from-literal=OPENAI_API_KEY=sk-...
+            - name: GOOSE_PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: goose-ttyd-api-keys
+                  key: GOOSE_PROVIDER
+            - name: GOOSE_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: goose-ttyd-api-keys
+                  key: GOOSE_MODEL
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: goose-ttyd-api-keys
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: goose-ttyd-api-keys
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: goose-ttyd-api-keys
+                  key: GOOGLE_API_KEY
+                  optional: true
+          volumeMounts:
+            - name: goose-config
+              mountPath: /home/goose/.config/goose
+            - name: goose-workspace
+              mountPath: /home/goose/workspace
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            tcpSocket:
+              port: 7681
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 7681
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: goose-config
+          persistentVolumeClaim:
+            claimName: goose-ttyd-config
+        - name: goose-workspace
+          persistentVolumeClaim:
+            claimName: goose-ttyd-workspace

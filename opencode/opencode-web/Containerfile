@@ -1,0 +1,70 @@
+FROM registry.redhat.io/ubi9/nodejs-24-minimal
+
+LABEL io.k8s.display-name="OpenCode Web" \
+      io.k8s.description="OpenCode AI coding assistant with browser-based web UI" \
+      io.openshift.expose-services="8081:http" \
+      io.openshift.tags="opencode,ai,coding-assistant,web"
+
+# nodejs-24-minimal defaults to a non-root user; switch to root for package
+# installation and directory setup, then drop back to 1001 at the end.
+USER 0
+
+RUN microdnf install -y git && \
+    microdnf clean all && \
+    rm -rf /var/cache/dnf
+
+# Create user and directory layout.
+# Group 0 (root) ownership + g=u permissions allow any arbitrary UID
+# assigned by OpenShift to read/write at runtime.
+RUN useradd -u 1001 -r -g 0 -d /home/opencode -s /sbin/nologin opencode && \
+    mkdir -p \
+        /home/opencode/.config/opencode \
+        /home/opencode/.local/share/opencode \
+        /home/opencode/.opencode/bin \
+        /home/opencode/.opencode/node_modules \
+        /home/opencode/.opencode/agent \
+        /home/opencode/.cursor/skills-cursor \
+        /workspace && \
+    chown -R 1001:0 /home/opencode /workspace && \
+    chmod -R g=u /home/opencode /workspace
+
+# Install opencode binary. Still running as root; HOME set so the installer
+# writes the binary to /home/opencode/.opencode/bin.
+ENV HOME=/home/opencode
+RUN curl -fsSL https://opencode.ai/install | bash && \
+    chown -R 1001:0 /home/opencode/.opencode && \
+    chmod -R g=u /home/opencode/.opencode
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+# ── Runtime environment ────────────────────────────────────────────────────────
+# OPENCODE_SERVER_USERNAME / OPENCODE_SERVER_PASSWORD are intentionally left
+# empty here; inject them via --env (podman) or a Secret (OpenShift).
+ENV HOME=/home/opencode \
+    PATH=/home/opencode/.opencode/bin:$PATH \
+    OPENCODE_DISABLE_AUTOUPDATE=true \
+    OPENCODE_SERVER_USERNAME=opencode \
+    OPENCODE_SERVER_PASSWORD="" \
+    OPENCODE_PORT=8081 \
+    OPENCODE_HOSTNAME=0.0.0.0 \
+    OPENCODE_CORS="" \
+    BROWSER=true
+
+# ── Volume mount points ────────────────────────────────────────────────────────
+# /workspace                              rw  – project source files
+# /home/opencode/.config/opencode         rw  – persistent config & plugins
+# /home/opencode/.local/share/opencode    rw  – sessions, auth tokens, DB
+# /home/opencode/.opencode/agent          ro  – agent instruction files
+# /home/opencode/.cursor/skills-cursor    ro  – Cursor skill definitions
+VOLUME ["/workspace", \
+        "/home/opencode/.config/opencode", \
+        "/home/opencode/.local/share/opencode"]
+
+EXPOSE 8081
+
+WORKDIR /workspace
+
+USER 1001
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

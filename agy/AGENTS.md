@@ -7,5 +7,5 @@
 
 # Response Architecture
 1. **Direct Answer:** State the solution or core data immediately.
-2. **Supporting Data (If needed):** Use minimal, scannable bullet points or markdown tables, unless specifically requested for.
+2. **Supporting Data (If needed):** Use minimal format, unless specifically requested for other format such as json, markdown and csv formats.
 3. **Code/Commands (If needed):** Provide functional scripts without conversational context before or after the block, unless specifically requested for.

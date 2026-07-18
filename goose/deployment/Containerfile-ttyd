@@ -1,0 +1,104 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Goose CLI + ttyd web terminal container image (OpenShift-compatible)
+#
+# Build:  podman build -t goose-ttyd:v1 -f Containerfile-ttyd .
+#
+# Run:    podman run --rm -p 7681:7681 \
+#           -e OPENAI_API_KEY=mykey \
+#           -e GOOSE_PROVIDER=openai \
+#           -e GOOSE_MODEL=gpt-4o \
+#           -v goose-config:/home/goose/.config/goose \
+#           -v goose-workspace:/home/goose/workspace \
+#           goose-ttyd:v1
+#
+# Access: http://localhost:7681
+#
+# OpenShift deployment notes:
+#   - Runs as uid 1001 (no root, no privileged SCC required)
+#   - Exposes port 7681 (unprivileged)
+#   - Set API keys via Secret → env vars in your Deployment spec
+#   - Add --credential user:pass to CMD for basic auth, or front with an
+#     OpenShift Route + OAuth proxy for proper authN/Z
+# ─────────────────────────────────────────────────────────────────────────────
+
+ARG RHEL_VERSION=9
+
+FROM registry.access.redhat.com/ubi${RHEL_VERSION}:latest
+
+ARG RHEL_VERSION
+
+# ── 1. System dependencies + goose (as root) ──────────────────────────────────
+RUN dnf install -y \
+    ca-certificates \
+    git \
+    python3 \
+    sudo \
+    "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${RHEL_VERSION}.noarch.rpm" \
+    && dnf install -y goose \
+    && dnf clean all
+
+# Sanity check: generic goose only — fail if goose-redhat slipped in
+RUN rpm -q goose-redhat >/dev/null 2>&1 && \
+    echo "error: goose-redhat must not be installed for a generic provider setup" >&2 && \
+    exit 1 || true
+
+# ttyd – static self-contained binary, no extra libs required
+RUN curl -L -o /usr/local/bin/ttyd \
+    https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
+ && chmod +x /usr/local/bin/ttyd
+
+# ── 2. Non-root user + directory setup ───────────────────────────────────────
+RUN useradd -m -u 1001 -G wheel goose \
+    && echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel-nopasswd
+
+RUN mkdir -p \
+    /home/goose/.config/goose/custom_providers \
+    /home/goose/workspace
+
+COPY config.yaml /home/goose/.config/goose/config.yaml
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+    && chown -R 1001:0 /home/goose \
+    && chmod -R g+rwX /home/goose
+
+# ── 3. Environment ────────────────────────────────────────────────────────────
+ENV GOOSE_DISABLE_KEYRING=1 \
+    GOOSE_MODE=smart_approve \
+    GOOSE_TELEMETRY_OFF=1 \
+    TERM=xterm-256color \
+    HOME=/home/goose
+
+# ── 4. Persist goose state via named volumes ──────────────────────────────────
+# Mount these paths to keep config and workspace across container restarts.
+#
+# podman / docker:
+#   -v goose-config:/home/goose/.config/goose
+#   -v goose-workspace:/home/goose/workspace
+#
+# OpenShift PVC example (in your Deployment spec):
+#   volumes:
+#     - name: goose-config
+#       persistentVolumeClaim:
+#         claimName: goose-config-pvc
+#     - name: goose-workspace
+#       persistentVolumeClaim:
+#         claimName: goose-workspace-pvc
+#   volumeMounts:
+#     - name: goose-config
+#       mountPath: /home/goose/.config/goose
+#     - name: goose-workspace
+#       mountPath: /home/goose/workspace
+VOLUME ["/home/goose/.config/goose", "/home/goose/workspace"]
+
+USER 1001
+WORKDIR /home/goose/workspace
+
+# ── 5. Expose ttyd port ───────────────────────────────────────────────────────
+EXPOSE 7681
+
+# ── 6. Launch ttyd serving goose session ─────────────────────────────────────
+# --writable   : allow keyboard input (required for interactive TUI)
+# --once       : remove to allow multiple concurrent sessions
+# Replace "goose" "session" with "bash" for a plain shell with goose on PATH
+CMD ["ttyd", "--port", "7681", "--writable", "goose", "session"]

@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opencode-web
+  labels:
+    app: opencode-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opencode-web
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: opencode-web
+    spec:
+      # OpenShift: drop all capabilities; runs as UID 1001 / group 0
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: opencode-web
+          image: quay.io/kenghua_yeo/opencode-web:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+              protocol: TCP
+              name: http
+
+          # Credentials injected from Secret; LLM API keys from the same Secret
+          envFrom:
+            - secretRef:
+                name: opencode-auth
+
+          # Non-sensitive tuning knobs
+          env:
+            - name: OPENCODE_PORT
+              value: "8081"
+            - name: OPENCODE_HOSTNAME
+              value: "0.0.0.0"
+            - name: OPENCODE_DISABLE_AUTOUPDATE
+              value: "true"
+            - name: BROWSER
+              value: "true"
+            # Uncomment to allow additional CORS origins (e.g. an OAuth proxy)
+            # - name: OPENCODE_CORS
+            #   value: "https://oauth-proxy.example.com"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            # rw – project source files
+            - name: workspace
+              mountPath: /workspace
+            # rw – persistent opencode config & plugins
+            - name: config
+              mountPath: /home/opencode/.config/opencode
+            # rw – sessions, auth tokens, DB
+            - name: data
+              mountPath: /home/opencode/.local/share/opencode
+            # ro – agent instruction files
+            - name: agent
+              mountPath: /home/opencode/.opencode/agent
+              readOnly: true
+            # ro – Cursor skill definitions
+            - name: skills
+              mountPath: /home/opencode/.cursor/skills-cursor
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+
+          # tcpSocket probes avoid 401 Unauthorized failures when basic auth
+          # is enabled (httpGet on / would return 401 and kill the pod).
+          livenessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+
+          readinessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: opencode-workspace-pvc
+        - name: config
+          persistentVolumeClaim:
+            claimName: opencode-config-pvc
+        - name: data
+          persistentVolumeClaim:
+            claimName: opencode-data-pvc
+        - name: agent
+          persistentVolumeClaim:
+            claimName: opencode-agent-pvc
+        - name: skills
+          persistentVolumeClaim:
+            claimName: opencode-skills-pvc

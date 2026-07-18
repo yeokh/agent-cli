@@ -1,0 +1,56 @@
+# Goose AI Agent — OpenShift DevSpaces image
+#
+# Layers goose (RHEL 9 Extensions repo) onto the UDI ubi9 base so workspaces
+# start instantly without an on-start install step.
+#
+# Requires a registered RHEL host with entitlement certs to build.
+# On the build host, register once:
+#   sudo subscription-manager register
+#   sudo subscription-manager repos \
+#     --enable=rhel-9-for-$(arch)-extensions-rpms
+#
+# Build (mount entitlement certs so dnf can reach the Extensions repo):
+#   podman build \
+#     -t quay.io/<your-org>/goose-devspaces:latest \
+#     -f deployment/Containerfile-devspaces \
+#     --volume /etc/pki/entitlement:/etc/pki/entitlement:ro \
+#     --volume /etc/rhsm:/etc/rhsm:ro \
+#     deployment/
+#
+# Push:
+#   podman push quay.io/<your-org>/goose-devspaces:latest
+#
+# Update goose:
+#   Rebuild with --no-cache and repush; the devfile image ref picks it up on
+#   the next workspace restart (DevSpaces pulls Always by default).
+
+FROM quay.io/devfile/universal-developer-image:ubi9-latest
+
+USER root
+
+# Enable the RHEL 9 Extensions repo and install goose.
+# Entitlement certs are mounted at build time (--volume flags above) and are
+# NOT embedded in the final image layer.
+RUN ARCH="$(uname -m)" \
+    && subscription-manager repos \
+         --enable="rhel-9-for-${ARCH}-extensions-rpms" \
+    && dnf install -y goose \
+    && rpm -q goose-redhat >/dev/null 2>&1 \
+         && { echo "error: goose-redhat must not be present for generic provider setup" >&2; exit 1; } \
+         || true \
+    && dnf clean all
+
+# Pre-create config dirs; group-0 + g+rwX lets OpenShift's arbitrary UID write here
+RUN mkdir -p /home/user/.config/goose/custom_providers \
+    && chown -R 10001:0 /home/user/.config/goose \
+    && chmod -R g+rwX /home/user/.config/goose
+
+# Bake in the default extensions config (provider/model are injected at runtime)
+COPY --chown=10001:0 config.yaml /home/user/.config/goose/config.yaml
+
+ENV GOOSE_DISABLE_KEYRING=1 \
+    GOOSE_MODE=smart_approve \
+    GOOSE_TELEMETRY_OFF=1 \
+    HOME=/home/user
+
+USER 10001
