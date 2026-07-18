@@ -42,7 +42,7 @@ components:
   - name: goose
     container:
       # Replace with your image after building from Containerfile-devspaces
-      image: ququay.io/kenghua_yeo/goose-devspaces:v1 
+      image: quay.io/kenghua_yeo/goose-devspaces:v1 
       memoryLimit: 2Gi
       memoryRequest: 512Mi
       cpuLimit: "2"
