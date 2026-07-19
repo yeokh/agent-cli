@@ -1,0 +1,58 @@
+# Pydantic Assistant — OpenShift Dev Spaces image
+#
+# Layers the Python dependencies onto the Universal Developer Image (UDI) so
+# workspaces start instantly without an on-start pip install step.
+#
+# Why UDI instead of ubi9/python-312?
+#   ubi9/python-312 sets HOME=/opt/app-root/src, which conflicts with the IDE
+#   tooling that Dev Spaces injects into $HOME at workspace startup.
+#   UDI sets HOME=/home/user (user 10001:0) — the layout Dev Spaces expects —
+#   and already includes git, bash, curl, and Python 3.11+.
+#
+# Source files are NOT copied here; Dev Spaces mounts the git repo live
+# at ${PROJECT_SOURCE} via mountSources: true in devfile.yaml.
+#
+# Build:
+#   podman build \
+#     -t quay.io/kenghua_yeo/assistant-devspaces:latest \
+#     -f Containerfile-devspaces .
+#
+# Push:
+#   podman push quay.io/kenghua_yeo/assistant-devspaces:latest
+#
+# Update dependencies:
+#   Rebuild with --no-cache and repush; Dev Spaces pulls the new image on the
+#   next workspace restart (imagePullPolicy: Always is the DevSpaces default).
+
+FROM quay.io/devfile/universal-developer-image:ubi9-latest
+
+USER root
+
+# Pre-install Python dependencies so the workspace is ready immediately.
+# requirements.txt is the only file copied; source is mounted at runtime.
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
+
+# Create data dirs and make them writable by OpenShift's arbitrary UID.
+# UDI already configures /home/user with group-0 + g+rwX; we do the same
+# for the /app dirs used by the application.
+RUN mkdir -p /app/agent /app/input /app/output \
+    && chown -R 10001:0 /app \
+    && chmod -R g+rwX /app
+
+# Default runtime configuration — override via devfile env or OpenShift Secret.
+# API keys are intentionally absent; supply them at runtime.
+ENV PORT=8081 \
+    HOST=0.0.0.0 \
+    API_PROVIDER=anthropic \
+    MODEL=claude-opus-4-5 \
+    MAX_TURNS=50 \
+    MAX_OUTPUT_TOKENS=16384 \
+    ALLOW_SHELL=true \
+    SHELL_TIMEOUT=60 \
+    AGENT_DIR=/app/agent \
+    INPUT_DIR=/app/input \
+    OUTPUT_DIR=/app/output
+
+USER 10001

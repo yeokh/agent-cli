@@ -1,0 +1,122 @@
+schemaVersion: 2.2.2
+metadata:
+  name: agent-assistant
+  displayName: Pydantic Assistant
+  description: >
+    Interactive multi-turn AI chat assistant built on Pydantic AI and Flask,
+    running on OpenShift Dev Spaces. Dependencies are pre-installed in the
+    image; source is mounted live from the git repository. API keys are
+    supplied at runtime via environment variables or the web UI.
+  tags:
+    - AI
+    - Python
+    - Flask
+    - PydanticAI
+    - Chat
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Before opening this workspace:
+#
+#   1. Build and push the custom image (once, and whenever you update
+#      requirements.txt):
+#        podman build \
+#          -t quay.io/kenghua_yeo/assistant-devspaces:latest \
+#          -f Containerfile-devspaces .
+#        podman push quay.io/kenghua_yeo/assistant-devspaces:latest
+#
+#   2. Supply API keys — choose one option:
+#
+#      Option A: Uncomment the hard-coded env vars below (dev only).
+#
+#      Option B (recommended for shared clusters): create an OpenShift Secret
+#        oc create secret generic assistant-api-keys \
+#          --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
+#          --from-literal=OPENAI_API_KEY=sk-...
+#        Then uncomment the secretKeyRef blocks below.
+#
+#      Option C: Leave keys unset and enter them through the web UI after
+#        the workspace starts (Settings panel in the chat interface).
+#
+#   3. Open the workspace via the Dev Spaces dashboard or:
+#        https://<devspaces-host>/dashboard/#/load-factory?url=<repo-url>
+# ─────────────────────────────────────────────────────────────────────────────
+
+components:
+  - name: agent-assistant
+    container:
+      image: quay.io/kenghua_yeo/assistant-devspaces:latest
+      memoryLimit: 1Gi
+      memoryRequest: 256Mi
+      cpuLimit: "1"
+      cpuRequest: 100m
+      mountSources: true
+      env:
+        # ── App tunables ──────────────────────────────────────────────────────
+        - name: PORT
+          value: "8081"
+        - name: HOST
+          value: "0.0.0.0"
+        - name: API_PROVIDER
+          value: anthropic
+        - name: MODEL
+          value: claude-opus-4-5
+        - name: MAX_TURNS
+          value: "50"
+        - name: MAX_OUTPUT_TOKENS
+          value: "16384"
+        - name: ALLOW_SHELL
+          value: "true"
+        - name: SHELL_TIMEOUT
+          value: "60"
+
+        # ── API keys — Option A: hard-code (dev only, not for shared clusters) ─
+        # - name: ANTHROPIC_API_KEY
+        #   value: sk-ant-...
+        # - name: OPENAI_API_KEY
+        #   value: sk-...
+        # - name: OPENROUTER_API_KEY
+        #   value: sk-or-...
+
+        # ── API keys — Option B: source from an OpenShift Secret ─────────────
+        #   oc create secret generic assistant-api-keys \
+        #     --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
+        #     --from-literal=OPENAI_API_KEY=sk-...
+        # - name: ANTHROPIC_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: assistant-api-keys
+        #       key: ANTHROPIC_API_KEY
+        # - name: OPENAI_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: assistant-api-keys
+        #       key: OPENAI_API_KEY
+
+      endpoints:
+        - name: webapp
+          targetPort: 8081
+          exposure: public
+          protocol: https
+
+commands:
+  # ── Start the web application ───────────────────────────────────────────────
+  - id: start-webapp
+    exec:
+      label: "Start Pydantic Assistant (web UI on port 8081)"
+      component: agent-assistant
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "python web_app.py"
+      group:
+        kind: run
+        isDefault: true
+
+  # ── Refresh dependencies without rebuilding the image ───────────────────────
+  - id: install-deps
+    exec:
+      label: "Install / update Python dependencies"
+      component: agent-assistant
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "pip install --no-cache-dir -r requirements.txt"
+      group:
+        kind: build
+        isDefault: false
