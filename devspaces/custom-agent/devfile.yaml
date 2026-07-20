@@ -99,7 +99,7 @@ components:
           protocol: https
 
 commands:
-  # ── Auto-setup: install agents then start web app (runs on postStart) ───────
+  # ── Auto-setup: install agents then start web app in background (postStart) ──
   - id: setup-and-start
     exec:
       label: "Install Pi & Hermes agents, then start Pydantic Assistant"
@@ -117,8 +117,9 @@ commands:
         echo "==> [3/4] Installing Hermes agent..."
         curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
 
-        echo "==> [4/4] Starting web application on port ${PORT}..."
-        python web_app.py
+        echo "==> [4/4] Starting web application in background..."
+        nohup python web_app.py > /tmp/web_app.log 2>&1 &
+        echo "==> web_app.py started (PID $!), logs at /tmp/web_app.log"
       group:
         kind: run
         isDefault: true
@@ -129,7 +130,10 @@ commands:
       label: "Start Pydantic Assistant (web UI on port 8081)"
       component: agent-assistant
       workingDir: ${PROJECT_SOURCE}
-      commandLine: "python web_app.py"
+      commandLine: |
+        pkill -f web_app.py 2>/dev/null || true
+        nohup python web_app.py > /tmp/web_app.log 2>&1 &
+        echo "web_app.py started (PID $!), logs at /tmp/web_app.log"
       group:
         kind: run
         isDefault: false
@@ -160,6 +164,17 @@ commands:
         echo "==> Done."
       group:
         kind: build
+        isDefault: false
+
+  # ── Tail web app logs (manual) ───────────────────────────────────────────────
+  - id: show-logs
+    exec:
+      label: "Tail web_app.py logs"
+      component: agent-assistant
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "tail -f /tmp/web_app.log"
+      group:
+        kind: run
         isDefault: false
 
 events:
