@@ -11,7 +11,7 @@ https://github.com/google-antigravity/antigravity-sdk-python
 # uv pip install google-antigravity
 
 # export GEMINI_API_KEY="your_api_key_here"
-# export GEMINI_API_KEY="AIzaSyAnYluY87ejfW89SUKERxDIejmCaayHyCk"
+# export GEMINI_API_KEY="your_api_key_here"
 # cd anti*; cd ex*; cd gett*
 # python hello_world.py
 
