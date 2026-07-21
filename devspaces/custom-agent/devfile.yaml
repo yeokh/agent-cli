@@ -114,8 +114,12 @@ commands:
         echo "==> [2/4] Installing Pi coding agent..."
         npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
-        echo "==> [3/4] Installing Hermes agent..."
-        curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+        echo "==> [3/4] Installing OpenCode agent..."
+        curl -fsSL https://opencode.ai/install | bash
+        ln -s /home/user/.opencode/bin/opencode /home/user/.local/bin/opencode 
+
+        # echo "==> [3/4] Installing Hermes agent..."
+        # curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
 
         echo "==> [4/4] Starting web application in background..."
         nohup python web_app.py > /tmp/web_app.log 2>&1 &

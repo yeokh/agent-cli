@@ -13,30 +13,61 @@ data:
       - inference
     providers:
       inference:
+        - provider_id: openai-backend
+          provider_type: remote::openai
+          config:
+            api_key: "${OPENAI_API_KEY}"
         - provider_id: openrouter-backend
           provider_type: remote::openai
           config:
-            url: "https://openrouter.ai/api/v1"
-            api_key: "${OPENAI_API_KEY}"
+            base_url: "https://openrouter.ai/api/v1"
+            api_key: "${OPENROUTER_API_KEY}"
+          # MaaS is proxies by LiteLLM, otherwise may need to use remote::vllm
+        - provider_id: redhat-backend
+          provider_type: remote::openai
+          config:
+            base_url: "https://litellm-litemaas.apps.prod.rhoai.rh-aiservices-bu.com/v1"
+            api_key: "${REDHAT_API_KEY}"
         - provider_id: anthropic-backend
           provider_type: remote::anthropic
           config:
             api_key: "${ANTHROPIC_API_KEY}"
     models:
+      # Your app uses provider_id/model_id or model_id.  The provider_model_id is the provider's own model id.
+      # --- Native OpenAI Fleet ---
+      - model_id: "gpt-5-mini"
+        provider_id: openai-backend
+        provider_model_id: "gpt-5-mini"
+      - model_id: "gpt-5-nano"
+        provider_id: openai-backend
+        provider_model_id: "gpt-5-nano"
+
       # --- OpenRouter Fleet ---
       - model_id: "deepseek/deepseek-r1"
         provider_id: openrouter-backend
+        provider_model_id: "deepseek/deepseek-r1"
       - model_id: "anthropic/claude-haiku-4.5"
         provider_id: openrouter-backend
+        provider_model_id: "anthropic/claude-haiku-4.5"
       - model_id: "openai/gpt-5.4-nano"
         provider_id: openrouter-backend
+        provider_model_id: "openai/gpt-5.4-nano"
       - model_id: "openai/gpt-5-mini"
         provider_id: openrouter-backend
+        provider_model_id: "openai/gpt-5-mini"
       - model_id: "ibm-granite/granite-4.1-8b"
         provider_id: openrouter-backend
+        provider_model_id: "ibm-granite/granite-4.1-8b"
+
+      # --- Native Red Hat Fleet ---
+      - model_id: "Qwen3.6-35B-A3B"
+        provider_id: redhat-backend
+        provider_model_id: "Qwen3.6-35B-A3B"
+      - model_id: "Qwen2.5-VL-7B-Instruc"
+        provider_id: redhat-backend
+        provider_model_id: "Qwen2.5-VL-7B-Instruc"
       
       # --- Native Anthropic Fleet ---
-      # model_id is what your apps will call; provider_model_id is what Anthropic expects
       - model_id: "claude-haiku-4.5"
         provider_id: anthropic-backend
         provider_model_id: "claude-haiku-4.5"
@@ -66,6 +97,16 @@ spec:
             secretKeyRef:
               name: distribution-starter-secret
               key: OPENAI_API_KEY
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: OPENROUTER_API_KEY
+        - name: REDHAT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: REDHAT_API_KEY
         - name: ANTHROPIC_API_KEY
           valueFrom:
             secretKeyRef:
@@ -92,6 +133,16 @@ spec:
             secretKeyRef:
               name: distribution-starter-secret
               key: OPENAI_API_KEY
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: OPENROUTER_API_KEY
+        - name: REDHAT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: distribution-starter-secret
+              key: REDHAT_API_KEY
         - name: ANTHROPIC_API_KEY
           valueFrom:
             secretKeyRef:

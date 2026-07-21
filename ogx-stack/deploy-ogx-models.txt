@@ -1,26 +1,62 @@
 $ oc apply -f the secret and deployment
 $ oc get routes
 
-$ curl https://distribution-starter-route-kenghua-yeo-dev.apps.rm3.7wse.p1.openshiftapps.com/v1/models
+$ OGX_URL="https://distribution-starter-route-keyeo-dev.apps.rm2.thpm.p1.openshiftapps.com"
+$ curl ${OGX_URL}/v1/models | jq -r '.data[].id'
 
 Here's a simple test using one model from each provider...
 
-OpenRouter (gpt-5-mini):
-$ curl -s https://distribution-starter-route-kenghua-yeo-dev.apps.rm3.7wse.p1.openshiftapps.com/v1/chat/completions \
+OpenAI:
+$ curl -s ${OGX_URL}/v1/chat/completions \
     -H "Content-Type: application/json" \
     -d '{
-      "model": "openrouter-backend/gpt-5-mini",
+      "model": "openai-backend/gpt-5-mini",
       "messages": [{"role": "user", "content": "My name is John. Greet me one sentence."}]
-    }'
+    }' | jq '{message: .choices[0].message.content, total_tokens: .usage.total_tokens}'
 
-Anthropic (claude-haiku-4-5-20251001):
-$ curl -s https://distribution-starter-route-kenghua-yeo-dev.apps.rm3.7wse.p1.openshiftapps.com/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{
+OpenRouter:
+$ curl -s ${OGX_URL}/v1/chat/completions -H "Content-Type: application/json" -d '{
+      "model": "openrouter-backend/deepseek/deepseek-r1",
+      "messages": [{"role": "user", "content": "My name is John. Greet me one sentence."}]
+    }' | jq '{message: .choices[0].message.content, total_tokens: .usage.total_tokens}'
+
+Anthropic:
+curl -s ${OGX_URL}/v1/chat/completions     -H "Content-Type: application/json"     -d '{
       "model": "anthropic-backend/claude-haiku-4-5-20251001",
-      "messages": [{"role": "user", "content": "My name is John. Greet me in one sentence."}]
-    }' | python3 -m json.tool
+      "messages": [{"role": "user", "content": "My name is John. Greet me one sentence."}]
+    }' | jq '{message: .choices[0].message.content, total_tokens: .usage.total_tokens}'
+
+Red Hat MaaS:
+curl -s ${OGX_URL}/v1/chat/completions     -H "Content-Type: application/json"     -d '{
+      "model": "redhat-backend/Qwen2.5-VL-7B-Instruct",
+      "messages": [{"role": "user", "content": "My name is John. Greet me one sentence."}]
+    }' | jq '{message: .choices[0].message.content, total_tokens: .usage.total_tokens}'
+
+
+
+
+NOTE: Remove the jq to show full output including errors.
 
 The model ID format is <provider_id>/<provider_resource_id> as shown in the /v1/models response.
 
 
+TO TEST:
+curl "https://api.openai.com/v1/responses" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+    "model": "gpt-5.6",
+    "input": "Write a one-sentence bedtime story about a unicorn."
+  }'
+
+curl https://api.anthropic.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-3-5-sonnet-20241022",
+    "max_tokens": 1024,
+    "messages": [
+      {"role": "user", "content": "Hello, Claude!"}
+    ]
+  }'
