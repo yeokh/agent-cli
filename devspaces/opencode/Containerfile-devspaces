@@ -28,6 +28,7 @@ USER root
 RUN HOME=/home/user curl -fsSL https://opencode.ai/install | bash \
     && mkdir -p /home/user/.local/bin \
     && ln -s /home/user/.opencode/bin/opencode /home/user/.local/bin/opencode \
+    && ln -s /home/user/.opencode/bin/opencode /usr/local/bin/opencode \
     && chown -R 10001:0 /home/user/.opencode /home/user/.local/bin \
     && chmod -R g+rwX /home/user/.opencode /home/user/.local/bin
 
