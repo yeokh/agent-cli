@@ -1,0 +1,105 @@
+schemaVersion: 2.2.2
+metadata:
+  name: opencode-agent
+  displayName: OpenCode AI Agent
+  description: >
+    OpenCode AI coding agent running on OpenShift DevSpaces.
+    Built on UDI ubi9 with the opencode binary pre-installed.
+    Provider and API keys are injected at runtime via environment variables
+    or an OpenShift Secret — nothing is baked into the image.
+  tags:
+    - AI
+    - Agent
+    - OpenCode
+    - Python
+    - Node.js
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Before opening this workspace:
+#
+#   1. Build and push the custom image (once, and whenever you upgrade opencode):
+#        podman build \
+#          -t quay.io/kenghua_yeo/opencode-devspaces:latest \
+#          -f devspaces/opencode/Containerfile-devspaces \
+#          devspaces/opencode/
+#        podman push quay.io/kenghua_yeo/opencode-devspaces:latest
+#
+#   2. Supply API keys via an OpenShift Secret in the DevSpaces namespace.
+#      Example for OpenAI:
+#        oc create secret generic opencode-api-keys \
+#          --from-literal=OPENAI_API_KEY=sk-...
+#      Then uncomment the secretKeyRef env blocks in the container below.
+#
+#   3. Open the workspace via the DevSpaces dashboard or:
+#        https://<devspaces-host>/dashboard/#/load-factory?url=<repo-url>
+# ─────────────────────────────────────────────────────────────────────────────
+
+components:
+  - name: opencode
+    container:
+      # Replace with your image after building from Containerfile-devspaces
+      image: quay.io/kenghua_yeo/opencode-devspaces:latest
+      memoryLimit: 4Gi
+      memoryRequest: 512Mi
+      cpuLimit: "2"
+      cpuRequest: 200m
+      mountSources: true
+      volumeMounts:
+        - name: opencode-config
+          path: /home/user/.config/opencode
+      env:
+        - name: NODE_TLS_REJECT_UNAUTHORIZED
+          value: "0"
+        # ── Provider API keys ────────────────────────────────────────────────
+        # Option A: hard-code for development (not recommended for production)
+        # - name: OPENAI_API_KEY
+        #   value: sk-...
+        #
+        # Option B (recommended): source from an OpenShift Secret
+        #   oc create secret generic opencode-api-keys \
+        #     --from-literal=OPENAI_API_KEY=sk-...
+        # - name: OPENAI_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: opencode-api-keys
+        #       key: OPENAI_API_KEY
+        #
+        # Other supported providers (uncomment as needed):
+        # - name: ANTHROPIC_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: opencode-api-keys
+        #       key: ANTHROPIC_API_KEY
+        # - name: AZURE_OPENAI_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: opencode-api-keys
+        #       key: AZURE_OPENAI_API_KEY
+
+  # Persistent volume: survives workspace restarts and image rebuilds.
+  # Stores provider config, sessions, and project settings.
+  - name: opencode-config
+    volume:
+      size: 2Gi
+
+commands:
+  # ── Daily use ──────────────────────────────────────────────────────────────
+  - id: opencode-start
+    exec:
+      label: "Start OpenCode Session"
+      component: opencode
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "opencode"
+      group:
+        kind: run
+        isDefault: true
+
+  - id: opencode-version
+    exec:
+      label: "OpenCode Version (verify install)"
+      component: opencode
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "opencode --version"
+      group:
+        kind: run
+        isDefault: false

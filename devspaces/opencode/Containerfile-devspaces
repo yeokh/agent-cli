@@ -1,0 +1,44 @@
+# OpenCode AI — OpenShift DevSpaces image
+#
+# Layers the opencode binary onto the UDI ubi9 base so workspaces start
+# instantly without an on-start install step.
+#
+# Build:
+#   podman build \
+#     -t quay.io/kenghua_yeo/opencode-devspaces:latest \
+#     -f devspaces/opencode/Containerfile-devspaces \
+#     devspaces/opencode/
+#
+# Push:
+#   podman push quay.io/kenghua_yeo/opencode-devspaces:latest
+#
+# Update opencode:
+#   Rebuild with --no-cache and repush; the devfile image ref picks it up on
+#   the next workspace restart (DevSpaces pulls Always by default).
+
+FROM quay.io/devfile/universal-developer-image:ubi9-latest
+
+USER root
+
+# Install the latest opencode binary.
+# HOME is set explicitly so the installer always writes to /home/user/.opencode
+# regardless of which UID the build step runs as.
+# /home/user/.local/bin is already on PATH in the UDI image, so we symlink
+# the binary there rather than copying it to a system directory.
+RUN HOME=/home/user curl -fsSL https://opencode.ai/install | bash \
+    && mkdir -p /home/user/.local/bin \
+    && ln -s /home/user/.opencode/bin/opencode /home/user/.local/bin/opencode \
+    && chown -R 10001:0 /home/user/.opencode /home/user/.local/bin \
+    && chmod -R g+rwX /home/user/.opencode /home/user/.local/bin
+
+# Pre-create config dir; group-0 + g+rwX lets OpenShift's arbitrary UID write here.
+RUN mkdir -p /home/user/.config/opencode \
+    && chown -R 10001:0 /home/user/.config/opencode \
+    && chmod -R g+rwX /home/user/.config/opencode
+
+# Required because DevSpaces proxies TLS and the self-signed cert would
+# otherwise cause Node.js-based tooling (used by opencode) to fail.
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0 \
+    HOME=/home/user
+
+USER 10001

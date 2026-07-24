@@ -527,6 +527,7 @@ async def run_chat_turn(
         PartDeltaEvent,
         TextPartDelta,
     )
+    from pydantic_ai.messages import PartStartEvent, TextPart
 
     agent_dir = Path(agent_dir)
     input_dir = Path(input_dir)
@@ -566,7 +567,12 @@ async def run_chat_turn(
                         event_callback({"type": "error", "content": "Cancelled by user"})
                     return new_model_messages
 
-                if isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                    initial = event.part.content
+                    if initial:
+                        _current_text.append(initial)
+
+                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
                     delta = event.delta.content_delta
                     if delta:
                         _current_text.append(delta)

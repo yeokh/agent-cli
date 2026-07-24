@@ -1,0 +1,112 @@
+schemaVersion: 2.2.2
+metadata:
+  name: copilot-agent
+  displayName: GitHub Copilot CLI
+  description: >
+    GitHub Copilot CLI running on OpenShift DevSpaces.
+    Built on UDI ubi9 with the gh copilot extension pre-installed.
+    GitHub authentication is injected at runtime via GITHUB_TOKEN from an
+    OpenShift Secret — no credentials are baked into the image.
+  tags:
+    - AI
+    - Copilot
+    - GitHub
+    - CLI
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Before opening this workspace:
+#
+#   1. Build and push the custom image (once, and whenever you update):
+#        podman build \
+#          -t quay.io/kenghua_yeo/copilot-devspaces:latest \
+#          -f devspaces/copilot/Containerfile-devspaces \
+#          devspaces/copilot/
+#        podman push quay.io/kenghua_yeo/copilot-devspaces:latest
+#
+#   2. Supply a GitHub token with Copilot access via an OpenShift Secret:
+#        oc create secret generic copilot-github-token \
+#          --from-literal=GITHUB_TOKEN=ghp_...
+#      Then uncomment the secretKeyRef env block in the container below.
+#      The token must belong to a GitHub account with an active Copilot subscription.
+#
+#   3. Open the workspace via the DevSpaces dashboard or:
+#        https://<devspaces-host>/dashboard/#/load-factory?url=<repo-url>
+# ─────────────────────────────────────────────────────────────────────────────
+
+components:
+  - name: copilot
+    container:
+      # Replace with your image after building from Containerfile-devspaces
+      image: quay.io/kenghua_yeo/copilot-devspaces:latest
+      memoryLimit: 2Gi
+      memoryRequest: 512Mi
+      cpuLimit: "2"
+      cpuRequest: 200m
+      mountSources: true
+      volumeMounts:
+        - name: gh-config
+          path: /home/user/.config/gh
+      env:
+        # ── GitHub authentication ────────────────────────────────────────────
+        # Option A: hard-code for development (not recommended for production)
+        # - name: GITHUB_TOKEN
+        #   value: ghp_...
+        #
+        # Option B (recommended): source from an OpenShift Secret
+        #   oc create secret generic copilot-github-token \
+        #     --from-literal=GITHUB_TOKEN=ghp_...
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: copilot-github-token
+              key: GITHUB_TOKEN
+
+  # Persistent volume: survives workspace restarts and image rebuilds.
+  # Stores gh CLI auth state and extension config.
+  - name: gh-config
+    volume:
+      size: 1Gi
+
+commands:
+  # ── Common Copilot CLI commands ────────────────────────────────────────────
+  - id: copilot-suggest
+    exec:
+      label: "Copilot: Suggest a shell command"
+      component: copilot
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "gh copilot suggest"
+      group:
+        kind: run
+        isDefault: true
+
+  - id: copilot-explain
+    exec:
+      label: "Copilot: Explain a shell command"
+      component: copilot
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "gh copilot explain"
+      group:
+        kind: run
+        isDefault: false
+
+  - id: copilot-auth-status
+    exec:
+      label: "GitHub Auth Status (verify token)"
+      component: copilot
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "gh auth status"
+      group:
+        kind: run
+        isDefault: false
+
+  # ── Manual auth fallback ───────────────────────────────────────────────────
+  # Use this if GITHUB_TOKEN is not set via Secret and you want to log in interactively.
+  - id: gh-auth-login
+    exec:
+      label: "GitHub Auth Login (manual, first-time)"
+      component: copilot
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "gh auth login"
+      group:
+        kind: build
+        isDefault: false

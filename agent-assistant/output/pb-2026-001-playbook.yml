@@ -1,0 +1,93 @@
+---
+# Ansible Playbook: Configure firewall for new Java web application
+# Request ID: PB-2026-001
+# Target: web-prod-01 (192.168.10.50)
+# OS: Red Hat Enterprise Linux 9.3
+
+- name: Configure firewall for new Java web application
+  hosts: web_prod_01
+  become: yes
+  gather_facts: yes
+
+  vars:
+    firewall_service: firewalld
+    required_ports:
+      - port: 8080
+        protocol: tcp
+        service: http-java
+      - port: 8443
+        protocol: tcp
+        service: https-java
+      - port: 9090
+        protocol: tcp
+        service: wildfly-admin
+
+  tasks:
+    - name: Ensure firewalld is installed
+      ansible.builtin.package:
+        name: firewalld
+        state: present
+
+    - name: Ensure firewalld service is started and enabled
+      ansible.builtin.systemd:
+        name: "{{ firewall_service }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Open port 8080 (TCP) for HTTP Java application
+      ansible.posix.firewalld:
+        port: 8080/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes
+      register: port_8080_result
+
+    - name: Open port 8443 (TCP) for HTTPS Java application
+      ansible.posix.firewalld:
+        port: 8443/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes
+      register: port_8443_result
+
+    - name: Open port 9090 (TCP) for WildFly admin console
+      ansible.posix.firewalld:
+        port: 9090/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes
+      register: port_9090_result
+
+    - name: Reload firewalld to ensure all rules persist
+      ansible.builtin.systemd:
+        name: "{{ firewall_service }}"
+        state: reloaded
+      when: port_8080_result.changed or port_8443_result.changed or port_9090_result.changed
+
+    - name: Verify port 8080 is open
+      ansible.builtin.command: firewall-cmd --list-ports
+      register: firewall_ports
+      changed_when: false
+
+    - name: Verify all required ports are open
+      ansible.builtin.assert:
+        that:
+          - "'8080/tcp' in firewall_ports.stdout"
+          - "'8443/tcp' in firewall_ports.stdout"
+          - "'9090/tcp' in firewall_ports.stdout"
+        fail_msg: "One or more required ports are not open in firewall"
+        success_msg: "All required ports (8080, 8443, 9090) are successfully open"
+
+    - name: Display firewall configuration summary
+      ansible.builtin.debug:
+        msg:
+          - "Firewall Configuration Complete"
+          - "Service: {{ firewall_service }}"
+          - "Status: Started and enabled for automatic startup"
+          - "Open ports:"
+          - "  - 8080/tcp (HTTP - Java application)"
+          - "  - 8443/tcp (HTTPS - Java application)"
+          - "  - 9090/tcp (WildFly admin console)"
+          - "Port 22 (SSH): Protected - not modified"
+          - "Configuration: Persistent across reboots"

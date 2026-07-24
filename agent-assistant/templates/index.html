@@ -1163,6 +1163,11 @@ function handleChatEvent(ev) {
       appendToolEvent(ev);
       break;
     case "done":
+      if (currentAiBubble && ev.message) {
+        currentAiBubble.textContent = ev.message.content || "";
+      } else if (!currentAiBubble && ev.message && ev.message.content) {
+        renderMessage(ev.message);
+      }
       finaliseAiMessage();
       break;
     case "error":

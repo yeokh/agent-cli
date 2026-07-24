@@ -1,0 +1,18 @@
+# oc apply -f networkpolicy.yaml
+# oc describe networkpolicy network-allow-all-ingress -n ogx-gateway
+#
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: network-allow-all-ingress
+  namespace: ogx-gateway        # ← change to your target namespace
+spec:
+  podSelector: {}                  # applies to all pods in the namespace
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector: {}    # empty selector matches all namespaces
+      ports:
+        - protocol: TCP
+          port: 8321

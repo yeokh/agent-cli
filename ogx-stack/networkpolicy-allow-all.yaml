@@ -1,0 +1,17 @@
+# oc apply -f networkpolicy.yaml
+# oc describe networkpolicy network-allow-all -n ogx-gateway
+#
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: network-allow-all
+  namespace: ogx-gateway        # ← change to your target namespace
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - {}                           # shorthand for allow all
+  egress:
+    - {}

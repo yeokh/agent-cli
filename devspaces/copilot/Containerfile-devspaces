@@ -1,0 +1,39 @@
+# GitHub Copilot CLI — OpenShift DevSpaces image
+#
+# Layers the GitHub Copilot CLI extension onto the UDI ubi9 base so
+# workspaces start instantly without an on-start install step.
+#
+# GitHub Copilot CLI is delivered as a `gh` extension (github/gh-copilot).
+# Authentication is done at runtime via GITHUB_TOKEN injected from an
+# OpenShift Secret — no credentials are baked into the image.
+#
+# Build:
+#   podman build \
+#     -t quay.io/kenghua_yeo/copilot-devspaces:latest \
+#     -f devspaces/copilot/Containerfile-devspaces \
+#     devspaces/copilot/
+#
+# Push:
+#   podman push quay.io/kenghua_yeo/copilot-devspaces:latest
+#
+# Update copilot extension:
+#   Rebuild with --no-cache and repush; the devfile image ref picks it up on
+#   the next workspace restart (DevSpaces pulls Always by default).
+
+FROM quay.io/devfile/universal-developer-image:ubi9-latest
+
+USER root
+
+# Install the GitHub Copilot CLI extension for gh.
+# GITHUB_TOKEN is not required at build time; the extension binary is
+# downloaded directly from GitHub releases via the install script.
+RUN curl -fsSL https://gh.io/copilot-install | bash
+
+# Pre-create gh config dir; group-0 + g+rwX lets OpenShift's arbitrary UID write here.
+RUN mkdir -p /home/user/.config/gh \
+    && chown -R 10001:0 /home/user/.config/gh \
+    && chmod -R g+rwX /home/user/.config/gh
+
+ENV HOME=/home/user
+
+USER 10001
