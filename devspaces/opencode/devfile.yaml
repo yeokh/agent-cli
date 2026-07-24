@@ -44,9 +44,6 @@ components:
       cpuLimit: "2"
       cpuRequest: 200m
       mountSources: true
-      volumeMounts:
-        - name: opencode-config
-          path: /home/user/.config/opencode
       env:
         - name: NODE_TLS_REJECT_UNAUTHORIZED
           value: "0"
@@ -75,12 +72,6 @@ components:
         #     secretKeyRef:
         #       name: opencode-api-keys
         #       key: AZURE_OPENAI_API_KEY
-
-  # Persistent volume: survives workspace restarts and image rebuilds.
-  # Stores provider config, sessions, and project settings.
-  - name: opencode-config
-    volume:
-      size: 2Gi
 
 commands:
   # ── Daily use ──────────────────────────────────────────────────────────────
