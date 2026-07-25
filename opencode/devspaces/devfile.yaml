@@ -48,7 +48,14 @@ components:
         - name: opencode-config
           path: /home/user/.config/opencode
         - name: opencode-data
-          path: /home/user/.local/share/opencode
+          # Mounted at the whole .local tree (not just .local/share/opencode)
+          # so XDG_STATE_HOME (~/.local/state), XDG_CACHE_HOME (~/.local/cache)
+          # and XDG_DATA_HOME (~/.local/share) all land on the PVC-backed,
+          # group-writable mount. Without this, opencode fails on first run
+          # with: EACCES: permission denied, mkdir '/home/user/.local/state'
+          # because that path isn't covered by any volume and is left on the
+          # container's ephemeral, possibly non-group-writable filesystem.
+          path: /home/user/.local
       env:
         - name: OPENCODE_DISABLE_AUTOUPDATE
           value: "true"
@@ -78,7 +85,9 @@ components:
       size: 1Gi
 
   # Persistent volume: survives workspace restarts and image rebuilds.
-  # Stores auth.json (provider credentials), the session DB, snapshots, logs.
+  # Mounted over the whole /home/user/.local tree: stores auth.json (provider
+  # credentials), the session DB, snapshots, logs (.local/share/opencode) as
+  # well as XDG_STATE_HOME (.local/state) and XDG_CACHE_HOME (.local/cache).
   - name: opencode-data
     volume:
       size: 1Gi

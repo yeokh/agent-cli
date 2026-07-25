@@ -24,19 +24,37 @@ FROM quay.io/devfile/universal-developer-image:ubi9-latest
 
 USER root
 
-# git/tar/gzip/ca-certificates are already present on the UDI base image;
+# git/tar/gzip/ca-certificates are already present on the UDI base image.
 # curl is used to fetch and run the opencode install script.
-# HOME is set so the installer writes to /home/user/.opencode/bin instead
-# of root's home.
-ENV HOME=/home/user
-RUN for i in 1 2 3 4 5; do \
-        curl -fsSL https://opencode.ai/install | bash && break; \
+#
+# IMPORTANT: opencode is installed into /usr/share/opencode (with a symlink
+# in /usr/bin), NOT under /home/user. OpenShift DevSpaces/Eclipse Che mounts
+# a per-workspace PVC over /home/user at container start ("persistent home"),
+# which overlays anything baked into that path at build time - including a
+# binary installed to the default $HOME/.opencode/bin. /usr/bin and
+# /usr/share are outside that mount and survive workspace restarts.
+#
+# The upstream install script hardcodes $HOME/.opencode/bin as its install
+# dir, so we point HOME at a throwaway build-time directory, then relocate
+# the resulting binary ourselves.
+RUN set -eu; \
+    install_home="$(mktemp -d)"; \
+    for i in 1 2 3 4 5; do \
+        HOME="$install_home" bash -c 'curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path' && break; \
         echo "opencode install failed (attempt $i/5), retrying..." >&2; \
         sleep 5; \
-    done
+    done; \
+    mkdir -p /usr/share/opencode; \
+    mv "$install_home/.opencode/bin/opencode" /usr/share/opencode/opencode; \
+    chmod 755 /usr/share/opencode/opencode; \
+    ln -sf /usr/share/opencode/opencode /usr/bin/opencode; \
+    rm -rf "$install_home"
 
 # Pre-create config/data dirs; group-0 + g+rwX lets OpenShift's arbitrary
 # UID write here, matching the UDI convention (uid 10001, HOME=/home/user).
+# These dirs are expected to live under the per-workspace PVC (see
+# devfile.yaml volumeMounts) and are recreated/persisted across restarts, so
+# unlike the binary above they're fine to keep under /home/user.
 #
 # NOTE: chown/chmod the *whole* .config and .local trees, not just the new
 # opencode/ subdirs. At container runtime (not build time) the UDI base
@@ -47,15 +65,15 @@ RUN for i in 1 2 3 4 5; do \
 RUN mkdir -p \
         /home/user/.config/opencode \
         /home/user/.local/share/opencode \
-    && chown -R 10001:0 /home/user/.opencode /home/user/.config /home/user/.local \
-    && chmod -R g+rwX /home/user/.opencode /home/user/.config /home/user/.local
+    && chown -R 10001:0 /home/user/.config /home/user/.local \
+    && chmod -R g+rwX /home/user/.config /home/user/.local
 
 # Avoid "detected dubious ownership" git errors when the project source is
 # mounted from a PVC/bind mount with a different uid/gid.
 RUN git config --system --add safe.directory '*'
 
-ENV PATH=/home/user/.opencode/bin:$PATH \
-    OPENCODE_DISABLE_AUTOUPDATE=true \
+# /usr/bin is already on PATH; no PATH edit needed for opencode itself.
+ENV OPENCODE_DISABLE_AUTOUPDATE=true \
     HOME=/home/user
 
 USER 10001
