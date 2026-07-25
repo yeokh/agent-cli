@@ -39,3 +39,6 @@ dist/
 # Ignore requested folder or file
 devworks
 devworks/
+
+# local work dirs
+wrk/

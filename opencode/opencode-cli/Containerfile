@@ -1,0 +1,99 @@
+# OpenCode CLI/TUI container
+#
+# Interactive `opencode` (TUI) and `opencode run` usage via `podman run`.
+# For the browser-based server, see ../opencode-web/Containerfile instead.
+#
+# --- Build ---
+#   podman build -t opencode-cli -f Containerfile .
+#
+# --- One-time setup (login to a provider, stored on the config/data volumes) ---
+#   podman volume create opencode-config
+#   podman volume create opencode-data
+#   podman volume create opencode-workspace
+#
+#   podman run --rm -it \
+#     -v opencode-config:/home/opencode/.config/opencode:Z \
+#     -v opencode-data:/home/opencode/.local/share/opencode:Z \
+#     opencode-cli auth login
+#
+# --- Run the TUI ---
+#   podman run --rm -it \
+#     -v opencode-config:/home/opencode/.config/opencode:Z \
+#     -v opencode-data:/home/opencode/.local/share/opencode:Z \
+#     -v opencode-workspace:/workspace:Z \
+#     opencode-cli
+#
+# --- Run non-interactively ---
+#   podman run --rm \
+#     -v opencode-config:/home/opencode/.config/opencode:Z \
+#     -v opencode-data:/home/opencode/.local/share/opencode:Z \
+#     -v opencode-workspace:/workspace:Z \
+#     opencode-cli run "explain this repo"
+#
+# See podman-run.sh for a wrapper that creates the volumes automatically.
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+LABEL io.k8s.display-name="OpenCode CLI" \
+      io.k8s.description="OpenCode AI coding agent — terminal UI and CLI" \
+      io.openshift.tags="opencode,ai,coding-assistant,cli,tui"
+
+USER 0
+
+# tar/gzip: required by the opencode install script to unpack the release archive.
+# git: required for repo detection, diffs, and the snapshot/undo feature.
+# ca-certificates: TLS for provider API calls and the installer.
+# shadow-utils: provides useradd (not present in ubi9-minimal).
+RUN microdnf install -y tar gzip git ca-certificates shadow-utils \
+    && microdnf clean all \
+    && rm -rf /var/cache/yum /var/cache/dnf
+
+# Create user and directory layout.
+# Group 0 (root) ownership + g=u permissions allow any arbitrary UID
+# assigned by OpenShift to read/write at runtime.
+RUN useradd -u 1001 -r -g 0 -m -d /home/opencode -s /bin/bash opencode \
+    && mkdir -p \
+        /home/opencode/.config/opencode \
+        /home/opencode/.local/share/opencode \
+        /workspace \
+    && chown -R 1001:0 /home/opencode /workspace \
+    && chmod -R g=u /home/opencode /workspace
+
+# Install the opencode binary. Still running as root; HOME is set so the
+# installer writes to /home/opencode/.opencode/bin.
+ENV HOME=/home/opencode
+RUN curl -fsSL https://opencode.ai/install | bash \
+    && chown -R 1001:0 /home/opencode/.opencode \
+    && chmod -R g=u /home/opencode/.opencode
+
+# Avoid "detected dubious ownership" git errors when /workspace is mounted
+# from the host with different uid/gid (bind mounts) or an arbitrary
+# OpenShift UID.
+RUN git config --system --add safe.directory '*'
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+# ── Runtime environment ─────────────────────────────────────────────────────
+ENV HOME=/home/opencode \
+    PATH=/home/opencode/.opencode/bin:$PATH \
+    OPENCODE_DISABLE_AUTOUPDATE=true
+
+# ── Volume mount points ──────────────────────────────────────────────────────
+# /home/opencode/.config/opencode       rw – portable, versionable settings
+#                                             (opencode.json, tui.json, agents/,
+#                                             commands/, plugins/)
+# /home/opencode/.local/share/opencode  rw – persistent state: auth.json,
+#                                             session db, snapshots, logs
+# /workspace                            rw – project source, separate from
+#                                             the two dirs above
+VOLUME ["/home/opencode/.config/opencode", \
+        "/home/opencode/.local/share/opencode", \
+        "/workspace"]
+
+WORKDIR /workspace
+
+USER 1001
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD []

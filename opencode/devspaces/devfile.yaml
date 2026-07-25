@@ -1,42 +1,117 @@
-schemaVersion: 2.2.0
+schemaVersion: 2.2.2
 metadata:
-  name: opencode-devspaces
-  displayName: OpenCode Dev Spaces
+  name: opencode-agent
+  displayName: OpenCode AI Agent
   description: >
-    OpenShift Dev Spaces workspace with the OpenCode AI coding assistant,
-    built on the Universal Developer Image (UDI) with Node.js, Python, Java,
-    Go, PHP, .NET, and common CLI tools pre-installed.
-  version: 1.0.0
+    OpenCode AI coding agent running on OpenShift DevSpaces.
+    Built on the UDI ubi9 base with opencode installed via its official
+    install script. Provider and API keys are injected at runtime via
+    environment variables or an OpenShift Secret — nothing is baked into
+    the image.
   tags:
-    - opencode
-    - ai
-    - python
-    - nodejs
-    - java
-    - go
+    - AI
+    - Agent
+    - OpenCode
 
-attributes:
-  controller.devfile.io/storage-type: per-workspace
+# ─────────────────────────────────────────────────────────────────────────────
+# Before opening this workspace:
+#
+#   1. Build and push the custom image (once, and whenever you upgrade opencode):
+#        podman build \
+#          -t quay.io/<your-org>/opencode-devspaces:latest \
+#          -f opencode/devspaces/Containerfile-devspaces \
+#          opencode/devspaces/
+#        podman push quay.io/<your-org>/opencode-devspaces:latest
+#
+#   2. Replace the image reference below with your quay.io repo.
+#
+#   3. Supply API keys via an OpenShift Secret in the DevSpaces namespace:
+#        oc create secret generic opencode-api-keys \
+#          --from-literal=ANTHROPIC_API_KEY=sk-ant-...
+#      Then uncomment the secretKeyRef env blocks in the container below.
+#
+#   4. Open the workspace via the DevSpaces dashboard or:
+#        https://<devspaces-host>/dashboard/#/load-factory?url=<repo-url>
+# ─────────────────────────────────────────────────────────────────────────────
 
 components:
-  - name: dev
+  - name: opencode
     container:
-      image: quay.io/njajodia/devspaces-opencode:latest
-      memoryLimit: 6Gi
+      # Replace with your image after building from Containerfile-devspaces
+      image: quay.io/kenghua_yeo/opencode-devspaces:latest
+      memoryLimit: 2Gi
       memoryRequest: 512Mi
-      cpuLimit: "4"
-      cpuRequest: 500m
+      cpuLimit: "2"
+      cpuRequest: 200m
       mountSources: true
-      sourceMapping: /projects
-      env:
-        - name: NODE_TLS_REJECT_UNAUTHORIZED
-          value: "0"
       volumeMounts:
-        - name: user-home
-          path: /home/user
-    attributes:
-      controller.devfile.io/merge-contribution: true
+        - name: opencode-config
+          path: /home/user/.config/opencode
+        - name: opencode-data
+          path: /home/user/.local/share/opencode
+      env:
+        - name: OPENCODE_DISABLE_AUTOUPDATE
+          value: "true"
+        # ── Provider / model ──────────────────────────────────────────────────
+        # Option A: hard-code for development (not recommended for production)
+        # - name: ANTHROPIC_API_KEY
+        #   value: sk-ant-...
+        #
+        # Option B (recommended): source from an OpenShift Secret
+        #   oc create secret generic opencode-api-keys \
+        #     --from-literal=ANTHROPIC_API_KEY=sk-ant-...
+        # - name: ANTHROPIC_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: opencode-api-keys
+        #       key: ANTHROPIC_API_KEY
+        # - name: OPENAI_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: opencode-api-keys
+        #       key: OPENAI_API_KEY
 
-volumes:
-  - name: user-home
-    size: 10Gi
+  # Persistent volume: survives workspace restarts and image rebuilds.
+  # Stores opencode.json, tui.json, agents/, commands/, plugins/.
+  - name: opencode-config
+    volume:
+      size: 1Gi
+
+  # Persistent volume: survives workspace restarts and image rebuilds.
+  # Stores auth.json (provider credentials), the session DB, snapshots, logs.
+  - name: opencode-data
+    volume:
+      size: 1Gi
+
+commands:
+  # ── First-time setup ───────────────────────────────────────────────────────
+  - id: opencode-login
+    exec:
+      label: "1. Log in to a provider (first-time API key setup)"
+      component: opencode
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "opencode auth login"
+      group:
+        kind: build
+        isDefault: false
+
+  # ── Daily use ──────────────────────────────────────────────────────────────
+  - id: opencode-tui
+    exec:
+      label: "2. Start OpenCode TUI"
+      component: opencode
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "opencode"
+      group:
+        kind: run
+        isDefault: true
+
+  - id: opencode-auth-list
+    exec:
+      label: "OpenCode Auth List (verify configured providers)"
+      component: opencode
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "opencode auth list"
+      group:
+        kind: run
+        isDefault: false
