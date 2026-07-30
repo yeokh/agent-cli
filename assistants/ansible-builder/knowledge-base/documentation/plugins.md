@@ -1,0 +1,1 @@
+Documentation content for guides/context-engineering/plugins.md

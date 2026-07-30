@@ -22,7 +22,13 @@ data:
           config:
             base_url: "https://openrouter.ai/api/v1"
             api_key: "${OPENROUTER_API_KEY}"
-          # MaaS is proxies by LiteLLM, otherwise may need to use remote::vllm
+            allowed_models:
+              - deepseek/deepseek-r1
+              - anthropic/claude-haiku-4.5
+              - openai/gpt-5.4-nano
+              - openai/gpt-5-mini
+              - ibm-granite/granite-4.1-8b
+        # MaaS is proxies by LiteLLM, otherwise may need to use remote::vllm
         - provider_id: redhat-backend
           provider_type: remote::openai
           config:
@@ -32,6 +38,8 @@ data:
           provider_type: remote::anthropic
           config:
             api_key: "${ANTHROPIC_API_KEY}"
+            allowed_models:
+              - claude-haiku-4-5-20251001
     models:
       # Your app uses provider_id/model_id or model_id.  The provider_model_id is the provider's own model id.
       # --- Native OpenAI Fleet ---

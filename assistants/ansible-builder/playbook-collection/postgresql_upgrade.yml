@@ -1,0 +1,12 @@
+---
+- name: PostgreSQL Upgrade Playbook
+  hosts: pgsql-active, pgsql-passive
+  become: yes
+  vars:
+    vcenter_hostname: vcenter.example.com
+    vcenter_username: admin
+    vcenter_password: password
+    vm_folder: "/Datacenter/vm/Servers"
+    datacenter: "Datacenter"
+  roles:
+    - role: postgresql_upgrade

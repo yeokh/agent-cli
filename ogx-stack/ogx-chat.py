@@ -9,7 +9,8 @@ client = OpenAI(base_url=f"{ogx_host}/v1", api_key="fake")
 
 #MODEL = "anthropic/claude-haiku-4.5"
 #MODEL = "openai/gpt-5-nano"
-MODEL = "openai/gpt-5-mini"
+MODEL = os.environ.get("OGX_MODEL", "openai/gpt-5-mini")
+
 
 history = []
 

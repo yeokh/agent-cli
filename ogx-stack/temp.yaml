@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: distribution-starter-secret
+  labels:
+    app: distribution-starter
+type: Opaque
+stringData:
+  OPENAI_API_KEY: "REDACTED"
+  OPENROUTER_API_KEY: "REDACTED"
+  REDHAT_API_KEY: "REDACTED"
+  ANTHROPIC_API_KEY: "REDACTED"

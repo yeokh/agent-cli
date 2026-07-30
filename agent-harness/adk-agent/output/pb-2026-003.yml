@@ -1,0 +1,130 @@
+# ============================================================
+# Playbook: Create local service accounts and assign group memberships
+# Request ID: PB-2026-003
+# Generated for: win-app-01
+# OS: Windows Server 2022 Datacenter
+# Requested by: Priya Nair on 2026-06-20
+# ============================================================
+
+---
+- name: Create local service accounts and assign group memberships
+  hosts: win-app-01
+  become: false
+  
+  vars:
+    ansible_connection: winrm
+    ansible_user: ansible_svc
+    ansible_winrm_transport: ntlm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_port: 5985
+  
+  tasks:
+    # Set this value in your Ansible Vault file before running
+    - name: Create svc-monitor local user account
+      ansible.windows.win_user:
+        name: svc-monitor
+        fullname: Monitoring Service Account
+        description: Used by the Datadog monitoring agent
+        password: "{{ vault_svc_monitor_password }}"
+        password_never_expires: true
+        user_cannot_change_password: false
+        account_disabled: false
+        update_password: on_create
+        state: present
+    
+    # Set this value in your Ansible Vault file before running
+    - name: Create svc-backup local user account
+      ansible.windows.win_user:
+        name: svc-backup
+        fullname: Backup Service Account
+        description: Used by Veeam backup agent
+        password: "{{ vault_svc_backup_password }}"
+        password_never_expires: true
+        user_cannot_change_password: false
+        account_disabled: false
+        update_password: on_create
+        state: present
+    
+    - name: Add svc-monitor to Remote Desktop Users group
+      ansible.windows.win_group_membership:
+        name: Remote Desktop Users
+        members:
+          - svc-monitor
+        state: present
+    
+    - name: Add svc-backup to Remote Desktop Users group
+      ansible.windows.win_group_membership:
+        name: Remote Desktop Users
+        members:
+          - svc-backup
+        state: present
+    
+    - name: Add svc-monitor to Event Log Readers group
+      ansible.windows.win_group_membership:
+        name: Event Log Readers
+        members:
+          - svc-monitor
+        state: present
+    
+    - name: Add svc-backup to Event Log Readers group
+      ansible.windows.win_group_membership:
+        name: Event Log Readers
+        members:
+          - svc-backup
+        state: present
+    
+    - name: Verify svc-monitor account exists and is enabled
+      ansible.windows.win_shell: |
+        $user = Get-LocalUser -Name 'svc-monitor' -ErrorAction SilentlyContinue
+        if ($user) {
+          "Account: $($user.Name), Enabled: $($user.Enabled), PasswordExpires: $($user.PasswordExpires)"
+        } else {
+          "Account not found"
+        }
+      register: svc_monitor_check
+      changed_when: false
+    
+    - name: Display svc-monitor account status
+      ansible.builtin.debug:
+        msg: "{{ svc_monitor_check.stdout_lines }}"
+    
+    - name: Verify svc-backup account exists and is enabled
+      ansible.windows.win_shell: |
+        $user = Get-LocalUser -Name 'svc-backup' -ErrorAction SilentlyContinue
+        if ($user) {
+          "Account: $($user.Name), Enabled: $($user.Enabled), PasswordExpires: $($user.PasswordExpires)"
+        } else {
+          "Account not found"
+        }
+      register: svc_backup_check
+      changed_when: false
+    
+    - name: Display svc-backup account status
+      ansible.builtin.debug:
+        msg: "{{ svc_backup_check.stdout_lines }}"
+    
+    - name: Verify svc-monitor group memberships
+      ansible.windows.win_shell: |
+        $groups = Get-LocalGroup | Where-Object { 
+          (Get-LocalGroupMember -Group $_.Name -ErrorAction SilentlyContinue).Name -match 'svc-monitor' 
+        } | Select-Object -ExpandProperty Name
+        $groups -join ', '
+      register: svc_monitor_groups
+      changed_when: false
+    
+    - name: Display svc-monitor group memberships
+      ansible.builtin.debug:
+        msg: "svc-monitor is member of: {{ svc_monitor_groups.stdout | trim }}"
+    
+    - name: Verify svc-backup group memberships
+      ansible.windows.win_shell: |
+        $groups = Get-LocalGroup | Where-Object { 
+          (Get-LocalGroupMember -Group $_.Name -ErrorAction SilentlyContinue).Name -match 'svc-backup' 
+        } | Select-Object -ExpandProperty Name
+        $groups -join ', '
+      register: svc_backup_groups
+      changed_when: false
+    
+    - name: Display svc-backup group memberships
+      ansible.builtin.debug:
+        msg: "svc-backup is member of: {{ svc_backup_groups.stdout | trim }}"
