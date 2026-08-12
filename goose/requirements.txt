@@ -1,5 +1,6 @@
-# Goose ACP Web UI dependencies
-# acp-chat.py has no external dependencies (stdlib only)
-# acp-web.py requires:
+# acp-web.py and acp-server.py require:
 flask>=3.0
 werkzeug>=3.0
+
+# acp-client.py requires:
+requests>=2.31

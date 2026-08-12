@@ -1,0 +1,44 @@
+---
+- name: Configure firewall for new Java web application
+  hosts: web-prod-01
+  become: yes
+  vars:
+    application_ports:
+      - port: 8080
+        protocol: tcp
+        description: "HTTP for Java application"
+      - port: 8443
+        protocol: tcp
+        description: "HTTPS for Java application"
+      - port: 9090
+        protocol: tcp
+        description: "WildFly admin console"
+
+  tasks:
+    - name: Ensure firewalld service is started and enabled
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: yes
+
+    - name: Configure firewall ports for Java application
+      ansible.posix.firewalld:
+        port: "{{ item.port }}/{{ item.protocol }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop: "{{ application_ports }}"
+      register: firewall_result
+
+    - name: Reload firewalld to ensure all changes are applied
+      ansible.builtin.command: firewall-cmd --reload
+      when: firewall_result.changed
+
+    - name: Verify firewall ports are open
+      ansible.builtin.command: "firewall-cmd --list-ports"
+      register: firewall_ports
+      changed_when: false
+
+    - name: Display open ports
+      ansible.builtin.debug:
+        msg: "{{ firewall_ports.stdout }}"

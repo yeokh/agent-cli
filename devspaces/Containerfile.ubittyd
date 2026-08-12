@@ -1,0 +1,19 @@
+#
+# podman build -f Containerfile.ttyd -t ttyd:ubi9 .
+#
+FROM registry.access.redhat.com/ubi9/ubi-minimal
+
+# Install bash (shell) and curl (to fetch the binary)
+RUN microdnf install -y --disablerepo='*' --enablerepo='ubi-9-*' bash curl-minimal && \
+    microdnf clean all
+
+# Download the pre-built ttyd binary from GitHub releases
+RUN curl -fsSL \
+        "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64" \
+        -o /usr/bin/ttyd && \
+    chmod +x /usr/bin/ttyd
+
+EXPOSE 7681
+WORKDIR /root
+
+CMD ["ttyd", "-W", "bash"]
