@@ -270,6 +270,7 @@ def info():
         "model":    model,
         "cmd":      " ".join(_goose_cmd),
         "alive":    bool(_bridge and _bridge.alive),
+        "cwd":      os.getcwd(),
     })
 
 

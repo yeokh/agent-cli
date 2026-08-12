@@ -97,11 +97,16 @@ commands for uploading local files to the agent and downloading its outputs.
 Usage:
 $ python3 acp-client.py                               # connects to http://127.0.0.1:7464
 $ python3 acp-client.py --server http://localhost:7464
-$ python3 acp-client.py --server http://remote-host:7464 --cwd /my/project
+$ python3 acp-client.py --server http://remote-host:7464
+$ python3 acp-client.py --server http://remote-host:7464 --cwd /path/on/server
 $ python3 acp-client.py --downloads ./output          # where auto-downloads are saved
 $ python3 acp-client.py --help
 
 Chat commands:
+  --cwd defaults to the server's working directory, not the client's local
+  directory. This is correct for remote connections. Pass --cwd only to
+  override with a specific path that exists on the server.
+
   /quit                        Exit the chat
   /session                     Show session ID and transfer area path
   /cancel                      Cancel an in-progress agent response

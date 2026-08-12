@@ -411,7 +411,8 @@ def _cmd_ls(path_str: str):
 
 # ── Chat session ──────────────────────────────────────────────────────────────
 
-def run_chat(server_url: str, cwd: str, downloads_dir: str) -> int:
+def run_chat(server_url: str, cwd: Optional[str], downloads_dir: str,
+             explicit_cwd: bool = False) -> int:
     print(_c(BOLD, f"\nConnecting to {server_url}…"), flush=True)
 
     client   = AcpClient(server_url)
@@ -451,6 +452,20 @@ def run_chat(server_url: str, cwd: str, downloads_dir: str) -> int:
     print(_c(DIM, f"  Capabilities: image={pc.get('image', False)}, "
                    f"audio={pc.get('audio', False)}"))
 
+    # ── fetch server info (needed for cwd resolution and banner) ─────────────
+    try:
+        server_info = requests.get(f"{server_url}/info", timeout=3).json()
+    except Exception:
+        server_info = {}
+
+    # ── resolve working directory ─────────────────────────────────────────────
+    # When --cwd is not given, use the server's own cwd rather than the client's
+    # local path — critical for remote connections where the local path won't exist
+    # on the server.
+    if not explicit_cwd:
+        cwd = server_info.get("cwd") or os.getcwd()
+        print(_c(DIM, f"  Using server cwd: {cwd}"))
+
     # ── session/new ──────────────────────────────────────────────────────────
     resp = client.request("session/new", {"cwd": cwd, "mcpServers": []}, **cbs)
     if "error" in resp:
@@ -463,13 +478,6 @@ def run_chat(server_url: str, cwd: str, downloads_dir: str) -> int:
     transfer_dir = result.get("transferDir", "")   # injected by server
 
     renderer.set_session(session_id)
-
-    # ── banner ───────────────────────────────────────────────────────────────
-    try:
-        server_info = requests.get(f"{server_url}/info", timeout=3).json()
-    except Exception:
-        server_info = {}
-
     renderer.drain_pending()
     _banner(server_url, session_id, cwd, transfer_dir, server_info)
 
@@ -678,9 +686,11 @@ File commands (in chat):
     )
     parser.add_argument(
         "--cwd", "-C",
-        default=os.getcwd(),
+        default=None,
         metavar="PATH",
-        help="Working directory reported to the agent (default: current directory)",
+        help="Working directory reported to the agent. Defaults to the server's "
+             "working directory, which is correct for remote connections. Pass an "
+             "explicit path (that exists on the server) to override.",
     )
     parser.add_argument(
         "--downloads", "-d",
@@ -690,7 +700,8 @@ File commands (in chat):
     )
     args = parser.parse_args()
 
-    sys.exit(run_chat(args.server, cwd=args.cwd, downloads_dir=args.downloads))
+    sys.exit(run_chat(args.server, cwd=args.cwd, downloads_dir=args.downloads,
+                      explicit_cwd=args.cwd is not None))
 
 
 if __name__ == "__main__":
