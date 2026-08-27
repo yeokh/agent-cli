@@ -1,0 +1,5 @@
+litellm[proxy]
+fastapi
+uvicorn
+httpx
+openai

@@ -1,0 +1,25 @@
+# LiteLLM proxy config.
+#
+# Run from the project root (so the "litellm_provider" package is importable):
+#   litellm --config proxy/config.yaml --port 4000
+#
+# This exposes standard OpenAI-shaped endpoints on the proxy:
+#   POST http://localhost:4000/v1/chat/completions   (stream: true/false)
+#   POST http://localhost:4000/v1/responses           (stream: true/false)
+# and translates them to/from the custom backend via litellm_provider/custom_handler.py.
+
+model_list:
+  - model_name: custom-llm-model
+    litellm_params:
+      model: my-custom-llm/backend-model-1
+      # api_base isn't read here (the handler reads MOCK_BACKEND_URL from the
+      # environment instead) but a real integration would typically pass it
+      # via litellm_params and read it out of kwargs in the handler.
+
+litellm_settings:
+  custom_provider_map:
+    - provider: my-custom-llm
+      custom_handler: litellm_provider.custom_handler.my_custom_llm
+
+general_settings:
+  master_key: sk-1234 # demo only -- set via env var / secrets manager for anything real
