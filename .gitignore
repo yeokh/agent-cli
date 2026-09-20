@@ -42,3 +42,6 @@ devworks/
 
 # local work dirs
 wrk/
+
+# Data files
+*.dta
