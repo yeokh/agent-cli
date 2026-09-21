@@ -1,0 +1,125 @@
+schemaVersion: 2.2.2
+metadata:
+  name: nanobot
+  displayName: nanobot AI Agent
+  description: >
+    nanobot AI agent running on OpenShift Dev Spaces.
+    Built on UDI ubi9 with nanobot installed from a hardened Hummingbird-based image.
+    Provider API keys and web token are injected at runtime via environment variables
+    or an OpenShift Secret — nothing is baked into the image.
+  tags:
+    - AI
+    - Agent
+    - nanobot
+    - Python
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Before opening this workspace:
+#
+#   1. Build and push the custom image (once, and whenever you upgrade nanobot):
+#        podman build \
+#          -t quay.io/<your-org>/nanobot-devspaces:latest \
+#          -f deployment/Containerfile-devspaces \
+#          .
+#        podman push quay.io/<your-org>/nanobot-devspaces:latest
+#
+#   2. Replace the image reference below with your quay.io repo.
+#
+#   3. Supply API keys and web token via an OpenShift Secret:
+#        oc create secret generic nanobot-api-keys \
+#          --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
+#          --from-literal=NANOBOT_WEB_TOKEN=<your-token>
+#      Then uncomment the secretKeyRef env blocks in the container below.
+#
+#   4. Open the workspace via the Dev Spaces dashboard or:
+#        https://<devspaces-host>/dashboard/#/load-factory?url=<repo-url>
+# ─────────────────────────────────────────────────────────────────────────────
+
+components:
+  - name: nanobot
+    container:
+      # Replace with your image after building from Containerfile-devspaces
+      image: quay.io/<your-org>/nanobot-devspaces:latest
+      memoryLimit: 4Gi
+      memoryRequest: 1Gi
+      cpuLimit: "2"
+      cpuRequest: 500m
+      mountSources: true
+      volumeMounts:
+        - name: nanobot-data
+          path: /home/user/.nanobot
+      endpoints:
+        - name: gateway
+          targetPort: 18790
+          exposure: public
+          protocol: https
+        - name: webui
+          targetPort: 8765
+          exposure: public
+          protocol: https
+      env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONFAULTHANDLER
+          value: "1"
+        # ── API keys and web token ────────────────────────────────────────────
+        # Option A: hard-code for development (not recommended for production)
+        # - name: ANTHROPIC_API_KEY
+        #   value: sk-ant-...
+        # - name: NANOBOT_WEB_TOKEN
+        #   value: <your-token>
+        #
+        # Option B (recommended): source from an OpenShift Secret
+        #   oc create secret generic nanobot-api-keys \
+        #     --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
+        #     --from-literal=NANOBOT_WEB_TOKEN=<your-token>
+        # - name: ANTHROPIC_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: nanobot-api-keys
+        #       key: ANTHROPIC_API_KEY
+        # - name: NANOBOT_WEB_TOKEN
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: nanobot-api-keys
+        #       key: NANOBOT_WEB_TOKEN
+
+  # Persistent volume: survives workspace restarts and image rebuilds.
+  # Stores nanobot config, sessions, channel data, and runtime state.
+  - name: nanobot-data
+    volume:
+      size: 2Gi
+
+commands:
+  # ── Start nanobot ──────────────────────────────────────────────────────────
+  - id: nanobot-start
+    exec:
+      label: "1. Start nanobot (gateway + WebUI)"
+      component: nanobot
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "nanobot start --host 0.0.0.0"
+      group:
+        kind: run
+        isDefault: true
+
+  # ── Status check ──────────────────────────────────────────────────────────
+  - id: nanobot-status
+    exec:
+      label: "2. nanobot status"
+      component: nanobot
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "nanobot status"
+      group:
+        kind: run
+        isDefault: false
+
+  # ── List channels ──────────────────────────────────────────────────────────
+  - id: nanobot-channels
+    exec:
+      label: "3. List nanobot channels"
+      component: nanobot
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "nanobot channel list"
+      group:
+        kind: run
+        isDefault: false

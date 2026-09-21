@@ -1,0 +1,17 @@
+user:
+  always_allow:
+  - todo__todo_write
+  - shell
+  ask_before: []
+  never_allow: []
+smart_approve:
+  always_allow:
+  - load_skill
+  ask_before:
+  - edit
+  - extensionmanager__manage_extensions
+  - shell
+  - todo__todo_write
+  - write
+  never_allow: []
+

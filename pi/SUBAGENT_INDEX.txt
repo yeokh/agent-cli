@@ -1,0 +1,280 @@
+================================================================================
+                    PI SUB-AGENT DOCUMENTATION INDEX
+================================================================================
+
+START HERE
+──────────────────────────────────────────────────────────────────────────────
+📄 README_SUBAGENT.md
+   └─ Complete overview with quick start, three modes, and navigation guide
+
+QUICK REFERENCE (5 min read)
+──────────────────────────────────────────────────────────────────────────────
+📄 SUBAGENT_SUMMARY.txt
+   └─ One-page reference with all essentials for quick lookup
+
+UNDERSTANDING THE MODEL (10 min read)
+──────────────────────────────────────────────────────────────────────────────
+📄 SUBAGENT_VISUALS.txt
+   └─ Visual diagrams showing:
+      • Three execution models (single, parallel, chain)
+      • Streaming and display modes
+      • Agent specialization
+      • Workflow patterns
+      • Execution timelines
+      • Security model
+
+CONCEPTS & INSTALLATION (15 min read)
+──────────────────────────────────────────────────────────────────────────────
+📄 subagent-demo.md
+   └─ Learn about:
+      • What sub-agents are
+      • Three execution modes in detail
+      • Agent definition format
+      • Standard agent library (scout, planner, reviewer, worker)
+      • Installation steps
+      • Interactive examples
+      • Workflow prompts (/implement, /scout-and-plan, /implement-and-review)
+
+REAL-WORLD WORKFLOWS (20 min read)
+──────────────────────────────────────────────────────────────────────────────
+📄 subagent-workflow-example.md
+   └─ Five detailed production examples:
+      1. Feature Implementation Workflow (scout → planner → worker → reviewer → worker)
+      2. Parallel Codebase Analysis (3 scouts in parallel)
+      3. Refactoring Decision Flow (simple vs. advanced paths)
+      4. Multi-Agent Code Review (parallel reviewers + worker)
+      5. Learning & Documentation (understanding complex modules)
+      
+      Plus:
+      • Real-world command examples
+      • Customizing agents for your project
+      • Key interaction patterns (5 examples)
+
+COMPLETE API REFERENCE (30 min read)
+──────────────────────────────────────────────────────────────────────────────
+📄 subagent-api-reference.md
+   └─ Deep technical reference including:
+      • Tool name and all parameters
+      • Three modes with complete schemas
+      • Return value structure
+      • Available agents with detailed descriptions
+      • System prompts for each agent
+      • Error handling and codes
+      • Display modes (collapsed vs. expanded)
+      • Tool call formatting
+      • Usage statistics format
+      • Workflow templates
+      • SDK integration examples
+      • Limitations and constraints
+
+CODE EXAMPLES
+──────────────────────────────────────────────────────────────────────────────
+📄 subagent-interactive-demo.ts
+   └─ Runnable TypeScript demonstration of:
+      • Single agent execution
+      • Parallel execution
+      • Chain execution
+      • Real-time event streaming
+      • Output and result handling
+
+QUICK LOOKUP DURING USE
+──────────────────────────────────────────────────────────────────────────────
+
+What's the subagent tool?
+  → SUBAGENT_SUMMARY.txt (first paragraph)
+
+How do I install it?
+  → README_SUBAGENT.md (Installation section)
+  → subagent-demo.md (Installation section)
+
+What are the three modes?
+  → SUBAGENT_SUMMARY.txt (Three Execution Modes)
+  → README_SUBAGENT.md (Three Execution Modes)
+  → SUBAGENT_VISUALS.txt (All diagrams)
+
+How do I use single agent mode?
+  → subagent-demo.md (Single agent section)
+  → subagent-api-reference.md (Mode 1: Single Agent)
+
+How do I run tasks in parallel?
+  → SUBAGENT_VISUALS.txt (Parallel Execution diagram)
+  → subagent-api-reference.md (Mode 2: Parallel Execution)
+
+How do I chain tasks with context?
+  → subagent-workflow-example.md (Example 1: Feature Implementation)
+  → subagent-api-reference.md (Mode 3: Chain Execution)
+  → SUBAGENT_VISUALS.txt (Chain diagram)
+
+What are the standard agents?
+  → README_SUBAGENT.md (Standard Agents table)
+  → subagent-demo.md (Standard agents section)
+  → subagent-api-reference.md (Available Agents)
+
+What's the difference between scout, planner, reviewer, worker?
+  → README_SUBAGENT.md (Specialization section)
+  → SUBAGENT_VISUALS.txt (Agent Specialization)
+  → subagent-api-reference.md (System Prompts section)
+
+How do I use workflow templates?
+  → subagent-demo.md (Workflow Prompts section)
+  → README_SUBAGENT.md (Workflow Templates)
+  → subagent-api-reference.md (Workflow Templates)
+
+Can I create custom agents?
+  → subagent-workflow-example.md (Customizing Agents)
+  → README_SUBAGENT.md (Advanced Customization)
+
+What are the limits?
+  → SUBAGENT_SUMMARY.txt (Limits section)
+  → subagent-api-reference.md (Limitations)
+  → README_SUBAGENT.md (Limitations)
+
+How does security work?
+  → subagent-demo.md (Security Model section)
+  → README_SUBAGENT.md (Security section)
+  → SUBAGENT_VISUALS.txt (Security Model diagram)
+
+Can I use project-local agents?
+  → subagent-demo.md (Security Model section)
+  → subagent-api-reference.md (agentScope parameter)
+  → README_SUBAGENT.md (Security section)
+
+What happens if a step fails?
+  → subagent-api-reference.md (Error Handling)
+  → SUBAGENT_VISUALS.txt (Error Handling section)
+
+How do I view full output?
+  → SUBAGENT_VISUALS.txt (Display modes section)
+  → subagent-api-reference.md (Display Modes)
+
+What do the usage stats mean?
+  → README_SUBAGENT.md (Usage Statistics)
+  → SUBAGENT_VISUALS.txt (Output Display section)
+  → subagent-api-reference.md (Usage Stats)
+
+I want real-world examples
+  → subagent-workflow-example.md (5 complete examples)
+  → README_SUBAGENT.md (Real-World Examples)
+
+I want to run code examples
+  → subagent-interactive-demo.ts (TypeScript demo)
+
+================================================================================
+
+READING ORDER FOR DIFFERENT GOALS
+
+Goal: Quick Understanding (15 minutes)
+  1. SUBAGENT_SUMMARY.txt          (overview)
+  2. SUBAGENT_VISUALS.txt          (diagrams)
+  3. subagent-demo.md              (concepts)
+
+Goal: Get Started Using It (20 minutes)
+  1. README_SUBAGENT.md            (overview + quick start)
+  2. SUBAGENT_SUMMARY.txt          (parameters reference)
+  3. subagent-workflow-example.md  (copy an example)
+
+Goal: Deep Dive (1 hour)
+  1. README_SUBAGENT.md            (overview)
+  2. SUBAGENT_VISUALS.txt          (execution models)
+  3. subagent-demo.md              (concepts)
+  4. subagent-workflow-example.md  (workflows)
+  5. subagent-api-reference.md     (API details)
+
+Goal: Implement Specific Workflow (30 minutes)
+  1. subagent-workflow-example.md  (find matching example)
+  2. subagent-api-reference.md     (check parameters)
+  3. SUBAGENT_SUMMARY.txt          (parameter syntax)
+
+Goal: SDK Integration (45 minutes)
+  1. README_SUBAGENT.md            (SDK Integration section)
+  2. subagent-interactive-demo.ts  (code example)
+  3. subagent-api-reference.md     (API reference)
+
+Goal: Troubleshoot Issue (10 minutes)
+  1. SUBAGENT_SUMMARY.txt          (check limits/errors)
+  2. subagent-api-reference.md     (error handling)
+  3. README_SUBAGENT.md            (troubleshooting)
+
+================================================================================
+
+FILE ORGANIZATION BY CONTENT TYPE
+
+Concepts & Overview
+  • README_SUBAGENT.md (comprehensive overview)
+  • subagent-demo.md (detailed concepts)
+  • SUBAGENT_SUMMARY.txt (quick reference)
+
+Visual/Diagram Reference
+  • SUBAGENT_VISUALS.txt (all diagrams and timelines)
+
+Practical Examples
+  • subagent-workflow-example.md (5 real workflows)
+  • subagent-interactive-demo.ts (code demo)
+
+API & Technical Details
+  • subagent-api-reference.md (complete API docs)
+  • subagent-demo.md (agent definitions)
+
+Quick Lookup
+  • SUBAGENT_SUMMARY.txt (one-page reference)
+  • This file (index and navigation)
+
+================================================================================
+
+FILE SIZES & READ TIME
+
+File                           Size   Read Time
+──────────────────────────────────────────────────
+README_SUBAGENT.md            12 KB   8 minutes
+SUBAGENT_SUMMARY.txt           4 KB   3 minutes
+SUBAGENT_VISUALS.txt          15 KB  12 minutes
+subagent-demo.md               6 KB   5 minutes
+subagent-workflow-example.md    9 KB   8 minutes
+subagent-api-reference.md      10 KB   9 minutes
+subagent-interactive-demo.ts    8 KB   5 minutes (to understand)
+
+Total: 64 KB, ~50 minutes to read all (pick sections as needed)
+
+================================================================================
+
+QUICK COMMAND REFERENCE
+
+Installation:
+  mkdir -p ~/.pi/agent/extensions/subagent
+  ln -sf $(pwd)/examples/extensions/subagent/* ~/.pi/agent/extensions/subagent/
+
+  mkdir -p ~/.pi/agent/agents
+  for f in examples/extensions/subagent/agents/*.md; do
+    ln -sf $(pwd)/$f ~/.pi/agent/agents/$(basename "$f")
+  done
+
+Interactive:
+  pi
+  > /implement add Redis caching
+  > Use scout to find auth code
+  > Run 3 scouts: auth, models, providers
+
+Single Agent:
+  {
+    "agent": "scout",
+    "task": "Find all error handlers"
+  }
+
+Parallel:
+  {
+    "tasks": [
+      { "agent": "scout", "task": "Find auth" },
+      { "agent": "scout", "task": "Find models" }
+    ]
+  }
+
+Chain:
+  {
+    "chain": [
+      { "agent": "scout", "task": "Find code" },
+      { "agent": "planner", "task": "Plan: {previous}" },
+      { "agent": "worker", "task": "Implement: {previous}" }
+    ]
+  }
+
+================================================================================

@@ -1,0 +1,287 @@
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# LiteLLM Gateway — OpenShift Deployment
+#
+# Includes: ConfigMap, Deployment, Service, Route
+#
+# Apply order (namespace must exist first):
+#   oc new-project litellm-gw                        # once
+#   oc apply -f deploy-litellm-secrets.yaml          # secrets first
+#   oc apply -f deploy-litellm.yaml
+#   oc apply -f networkpolicy-litellm-gw.yaml        # restrict ingress/egress
+#
+# Note: unlike the ogx setup, LiteLLM reads os.environ/<VAR> natively at
+# startup, so no envsubst init container is required. The ConfigMap stores
+# the config with variable references; secrets are injected as env vars from
+# the Secret — keeping all sensitive values out of the ConfigMap.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── ConfigMap: LiteLLM config.yaml ───────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  labels:
+    app: litellm-gw
+data:
+  config.yaml: |
+    general_settings:
+      master_key: os.environ/LITELLM_MASTER_KEY
+      request_logging: true
+      health_check_interval: 300    # avoid sequential startup probes across all 13 models
+
+    model_list:
+
+      # ── OpenAI ────────────────────────────────────────────────────────────
+      - model_name: gpt-5.4-nano
+        litellm_params:
+          model: openai/gpt-5.4-nano
+          api_key: os.environ/OPENAI_API_KEY
+
+      - model_name: gpt-5-mini
+        litellm_params:
+          model: openai/gpt-5-mini
+          api_key: os.environ/OPENAI_API_KEY
+
+      - model_name: gpt-5-nano
+        litellm_params:
+          model: openai/gpt-5-nano
+          api_key: os.environ/OPENAI_API_KEY
+
+      # ── Anthropic (direct) ────────────────────────────────────────────────
+      - model_name: claude-haiku-4-5
+        litellm_params:
+          model: anthropic/claude-haiku-4-5-20251001
+          api_key: os.environ/ANTHROPIC_API_KEY
+
+      # ── OpenRouter ────────────────────────────────────────────────────────
+      - model_name: openrouter/claude-haiku-4.5
+        litellm_params:
+          model: openrouter/anthropic/claude-haiku-4.5
+          api_key: os.environ/OPENROUTER_API_KEY
+
+      - model_name: openrouter/gpt-5.4-nano
+        litellm_params:
+          model: openrouter/openai/gpt-5.4-nano
+          api_key: os.environ/OPENROUTER_API_KEY
+
+      - model_name: openrouter/gpt-5-mini
+        litellm_params:
+          model: openrouter/openai/gpt-5-mini
+          api_key: os.environ/OPENROUTER_API_KEY
+
+      # ── Red Hat MaaS ──────────────────────────────────────────────────────
+      - model_name: qwen3-14b
+        litellm_params:
+          model: openai/qwen3-14b
+          api_base: os.environ/REDHAT_MAAS_BASE_URL
+          api_key: os.environ/REDHAT_API_KEY
+
+      - model_name: gpt-oss-20b
+        litellm_params:
+          model: openai/gpt-oss-20b
+          api_base: os.environ/REDHAT_MAAS_BASE_URL
+          api_key: os.environ/REDHAT_API_KEY
+
+      - model_name: gpt-oss-120b
+        litellm_params:
+          model: openai/gpt-oss-120b
+          api_base: os.environ/REDHAT_MAAS_BASE_URL
+          api_key: os.environ/REDHAT_API_KEY
+
+    litellm_settings:
+      drop_params: true
+      telemetry: false        # disable BerriAI analytics HTTP call on startup
+      request_timeout: 30     # cap provider probes so a dead endpoint can't stall boot
+
+    router_settings:
+      routing_strategy: simple-shuffle
+      enable_pre_call_checks: false   # use cached health state, skip per-request probe
+
+---
+# ── Deployment ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-gw
+  labels:
+    app: litellm-gw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm-gw
+  template:
+    metadata:
+      labels:
+        app: litellm-gw
+    spec:
+      # ── Init container: pre-download tiktoken BPE encodings ─────────────────
+      # Uses the same image (already has tiktoken installed) to populate an
+      # emptyDir with the encoding files before the main container starts.
+      # This avoids CDN round-trips (openaipublic.blob.core.windows.net) on
+      # every cold start.  The emptyDir is ephemeral — it refills if the pod
+      # is rescheduled, but that single download is still faster than LiteLLM
+      # doing it lazily during request handling.
+      # OCP restricted SCC — pod-level security context
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      initContainers:
+      - name: tiktoken-init
+        image: ghcr.io/berriai/litellm-non_root:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            python3 -c "
+            import tiktoken, os
+            for enc in ['cl100k_base', 'o200k_base', 'p50k_base', 'r50k_base']:
+                print(f'Downloading {enc}...')
+                tiktoken.get_encoding(enc)
+            print('Tiktoken cache ready.')
+            "
+        env:
+        - name: TIKTOKEN_CACHE_DIR
+          value: /tmp/tiktoken_cache
+        # OCP restricted SCC — container-level security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: tiktoken-cache
+          mountPath: /tmp/tiktoken_cache
+
+      containers:
+      - name: litellm
+        image: ghcr.io/berriai/litellm-non_root:latest
+        imagePullPolicy: IfNotPresent
+        args: ["--config", "/app/config.yaml", "--port", "4000"]
+        ports:
+        - containerPort: 4000
+          protocol: TCP
+          name: http
+        # OCP restricted SCC — container-level security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+        env:
+        # ── Startup performance ──────────────────────────────────────────────
+        # Belt-and-suspenders alongside config.yaml settings; some startup
+        # code paths read env vars before the config file is parsed.
+        - name: LITELLM_TELEMETRY
+          value: "False"
+        - name: DISABLE_TELEMETRY
+          value: "True"
+        - name: DISABLE_UI
+          value: "True"
+        - name: TIKTOKEN_CACHE_DIR
+          value: /tmp/tiktoken_cache
+
+        # ── Secrets — referenced by os.environ/<VAR> in config.yaml ─────────
+        - name: LITELLM_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: litellm-secret
+              key: LITELLM_MASTER_KEY
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: litellm-secret
+              key: OPENAI_API_KEY
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: litellm-secret
+              key: ANTHROPIC_API_KEY
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: litellm-secret
+              key: OPENROUTER_API_KEY
+        - name: REDHAT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: litellm-secret
+              key: REDHAT_API_KEY
+        - name: REDHAT_MAAS_BASE_URL
+          value: "https://maas-rhdp.apps.maas.redhatworkshops.io/v1"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        - name: tiktoken-cache
+          mountPath: /tmp/tiktoken_cache
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /health/readiness
+            port: 4000
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health/liveliness
+            port: 4000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+      volumes:
+      - name: config-volume
+        configMap:
+          name: litellm-config
+      - name: tiktoken-cache
+        emptyDir: {} 
+
+---
+# ── Service ───────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-gw-service
+  labels:
+    app: litellm-gw
+spec:
+  ports:
+  - port: 4000
+    targetPort: 4000
+    protocol: TCP
+    name: http
+  selector:
+    app: litellm-gw
+
+---
+# ── Route (OpenShift — edge TLS termination) ──────────────────────────────────
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: litellm-gw-route
+  labels:
+    app: litellm-gw
+spec:
+  to:
+    kind: Service
+    name: litellm-gw-service
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect   # HTTP → HTTPS redirect

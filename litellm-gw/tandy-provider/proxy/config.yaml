@@ -1,0 +1,77 @@
+# LiteLLM proxy config for the Tandy (Tandem) legacy API.
+#
+# Run from tandy-provider/ (so the "litellm_provider" package is importable):
+#   litellm --config proxy/config.yaml --port 4000
+#
+# This exposes standard OpenAI-shaped endpoints on the proxy:
+#   POST http://localhost:4000/v1/chat/completions   (stream: true/false)
+#   POST http://localhost:4000/v1/responses           (stream: true/false)
+# and translates them to/from the Tandy backend via
+# litellm_provider/custom_handler.py.
+#
+# Environment variables consumed by the handler:
+#   TANDY_URL       – full URL of the Tandy endpoint  (default: http://localhost:8000/TandemApi)
+#   TANDY_USER_ID   – email sent as "userId"           (default: litellm@example.com)
+#   TANDY_API_KEY   – bearer token (optional; omit if not required)
+#   TANDY_TIMEOUT   – HTTP timeout in seconds          (default: 60)
+
+model_list:
+
+  # ── gpt-5-mini (maps to Tandy key "gpt5-mini") ──────────────────────────
+  - model_name: gpt-5-mini
+    litellm_params:
+      model: tandy/gpt5-mini
+
+  # ── gpt-4o-mini (maps to Tandy key "gpt4o-mini") ────────────────────────
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: tandy/gpt4o-mini
+
+  # ── gpt-4o  ──────────────────────────────────────────────────────────────
+  - model_name: gpt-4o
+    litellm_params:
+      model: tandy/gpt4o
+
+  # ── gpt-4.1 ──────────────────────────────────────────────────────────────
+  - model_name: gpt-4.1
+    litellm_params:
+      model: tandy/gpt41
+
+  # ── gpt-4.1-mini ─────────────────────────────────────────────────────────
+  - model_name: gpt-4.1-mini
+    litellm_params:
+      model: tandy/gpt41-mini
+
+  # ── o3 / o3-mini ─────────────────────────────────────────────────────────
+  - model_name: o3
+    litellm_params:
+      model: tandy/gpto3
+
+  - model_name: o3-mini
+    litellm_params:
+      model: tandy/gpto3-mini
+
+litellm_settings:
+  # Drop any parameters the Tandy backend does not understand (e.g.
+  # reasoning_effort sent by the Responses API, tool_choice, etc.) instead
+  # of returning a 400.  This also silences the "/v1/responses" 400 errors
+  # that occur when unsupported params reach LiteLLM's validation layer
+  # before the custom handler is invoked.
+  drop_params: true
+
+  # ── Startup performance ──────────────────────────────────────────────────
+  # Biggest single win: disables the HTTP call to BerriAI analytics servers
+  # that runs synchronously on every startup.
+  telemetry: false
+
+  # Cap how long any provider probe or request can block.  Without this a
+  # single unreachable endpoint (e.g. vLLM not yet ready) stalls startup
+  # until the OS-level TCP timeout fires (~2 min).
+  request_timeout: 30        # seconds
+
+  custom_provider_map:
+    - provider: tandy
+      custom_handler: litellm_provider.custom_handler.tandy_custom_llm
+
+general_settings:
+  master_key: sk-1234   # demo only — use a secret / env var in production

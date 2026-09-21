@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nanobot
+  labels:
+    app: nanobot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nanobot
+  template:
+    metadata:
+      labels:
+        app: nanobot
+    spec:
+      containers:
+        - name: nanobot
+          image: quay.io/<your-org>/nanobot:latest
+          imagePullPolicy: Always
+          ports:
+            - name: gateway
+              containerPort: 18790
+              protocol: TCP
+            - name: webui
+              containerPort: 8765
+              protocol: TCP
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: PYTHONFAULTHANDLER
+              value: "1"
+            # API keys sourced from the nanobot-api-keys Secret.
+            # Create with:
+            #   oc create secret generic nanobot-api-keys \
+            #     --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
+            #     --from-literal=NANOBOT_WEB_TOKEN=<token>
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nanobot-api-keys
+                  key: ANTHROPIC_API_KEY
+            - name: NANOBOT_WEB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: nanobot-api-keys
+                  key: NANOBOT_WEB_TOKEN
+          volumeMounts:
+            - name: nanobot-data
+              mountPath: /home/nanobot/.nanobot
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          # OpenShift restricted-v2 SCC: no privilege escalation, all caps dropped.
+          # The entrypoint.sh detects non-root UID and skips the chown/setpriv path;
+          # the g+rwX dirs in the image let the arbitrary UID write .nanobot/.
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 18790
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 18790
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: nanobot-data
+          persistentVolumeClaim:
+            claimName: nanobot-data

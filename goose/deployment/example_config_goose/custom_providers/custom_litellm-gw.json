@@ -1,0 +1,59 @@
+{
+  "name": "custom_litellm-gw",
+  "engine": "openai",
+  "display_name": "litellm-gw",
+  "description": "Custom litellm-gw provider",
+  "api_key_env": "CUSTOM_LITELLM-GW_API_KEY",
+  "base_url": "http://litellm-gw-service.kenghua-yeo-dev.svc.cluster.local:4000/v1",
+  "models": [
+    {
+      "name": "gpt-oss-120b",
+      "context_limit": 128000,
+      "input_token_cost": null,
+      "output_token_cost": null,
+      "currency": null,
+      "supports_cache_control": null,
+      "reasoning": false
+    },
+    {
+      "name": "gpt-5-nano",
+      "context_limit": 128000,
+      "input_token_cost": null,
+      "output_token_cost": null,
+      "currency": null,
+      "supports_cache_control": null,
+      "reasoning": false
+    },
+    {
+      "name": "claude-haiku-4-5",
+      "context_limit": 128000,
+      "input_token_cost": null,
+      "output_token_cost": null,
+      "currency": null,
+      "supports_cache_control": null,
+      "reasoning": false
+    },
+    {
+      "name": "openrouter/claude-haiku-4.5",
+      "context_limit": 128000,
+      "input_token_cost": null,
+      "output_token_cost": null,
+      "currency": null,
+      "supports_cache_control": null,
+      "reasoning": false
+    }
+  ],
+  "headers": null,
+  "timeout_seconds": null,
+  "supports_streaming": true,
+  "requires_auth": true,
+  "catalog_provider_id": null,
+  "base_path": "v1/chat/completions",
+  "env_vars": null,
+  "dynamic_models": null,
+  "skip_canonical_filtering": false,
+  "model_doc_link": null,
+  "setup_steps": [],
+  "fast_model": null,
+  "preserves_thinking": true
+}

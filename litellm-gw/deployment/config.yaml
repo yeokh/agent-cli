@@ -1,0 +1,108 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# LiteLLM Proxy — config.yaml
+#
+# All secrets are referenced via os.environ/<VAR> so this file can be stored
+# in a ConfigMap or on disk without containing any sensitive values.
+# Populate the matching environment variables via .env (podman) or an
+# OpenShift Secret (see deploy-litellm-secrets.yaml).
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── 1. Global Settings ────────────────────────────────────────────────────────
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  request_logging: true
+  # Run background health checks every 5 min rather than blocking startup.
+  # LiteLLM will probe all 13 model endpoints sequentially at boot without this;
+  # a single slow/unreachable provider stalls the entire startup.
+  health_check_interval: 300
+
+# ── 2. Model List ────────────────────────────────────────────────────────────
+model_list:
+
+  # ── OpenAI ──────────────────────────────────────────────────────────────────
+  - model_name: gpt-5.4-nano
+    litellm_params:
+      model: openai/gpt-5.4-nano
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: gpt-5-mini
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: gpt-5-nano
+    litellm_params:
+      model: openai/gpt-5-nano
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ── Anthropic (direct) ──────────────────────────────────────────────────────
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ── OpenRouter ──────────────────────────────────────────────────────────────
+  - model_name: openrouter/claude-haiku-4.5
+    litellm_params:
+      model: openrouter/anthropic/claude-haiku-4.5
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: openrouter/gpt-5.4-nano
+    litellm_params:
+      model: openrouter/openai/gpt-5.4-nano
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: openrouter/gpt-5-mini
+    litellm_params:
+      model: openrouter/openai/gpt-5-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # ── Red Hat MaaS ────────────────────────────────────────────────────────────
+  - model_name: qwen3-14b
+    litellm_params:
+      model: openai/qwen3-14b       # openai/ prefix → OpenAI-compatible endpoint
+      api_base: os.environ/REDHAT_MAAS_BASE_URL
+      api_key: os.environ/REDHAT_API_KEY
+
+  - model_name: gpt-oss-20b
+    litellm_params:
+      model: openai/gpt-oss-20b
+      api_base: os.environ/REDHAT_MAAS_BASE_URL
+      api_key: os.environ/REDHAT_API_KEY
+
+  - model_name: gpt-oss-120b
+    litellm_params:
+      model: openai/gpt-oss-120b
+      api_base: os.environ/REDHAT_MAAS_BASE_URL
+      api_key: os.environ/REDHAT_API_KEY
+
+  # ── vLLM (local — host.containers.internal for rootless Podman) ─────────────
+  # Replace VLLM_MODEL with the actual model name your vLLM server advertises.
+  - model_name: vllm/local
+    litellm_params:
+      model: hosted_vllm/os.environ/VLLM_MODEL
+      api_base: os.environ/VLLM_BASE_URL
+      api_key: "none"
+
+# ── 3. LiteLLM Settings ───────────────────────────────────────────────────────
+litellm_settings:
+  drop_params: true          # silently drop unknown provider params
+
+  # ── Startup performance ──────────────────────────────────────────────────
+  # Biggest single win: disables the HTTP call to BerriAI analytics servers
+  # that runs synchronously on every startup.
+  telemetry: false
+
+  # Cap how long any provider probe or request can block.  Without this a
+  # single unreachable endpoint (e.g. vLLM not yet ready) stalls startup
+  # until the OS-level TCP timeout fires (~2 min).
+  request_timeout: 30        # seconds
+
+# ── 4. Router Settings ───────────────────────────────────────────────────────
+router_settings:
+  routing_strategy: simple-shuffle
+
+  # Skip the per-request model availability pre-check.  With this enabled
+  # (default) LiteLLM re-checks health before routing every call; disabling
+  # it lets the router use cached health state instead.
+  enable_pre_call_checks: false

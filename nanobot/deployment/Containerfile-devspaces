@@ -1,0 +1,126 @@
+# nanobot — OpenShift Dev Spaces Image
+#
+# Layers a pre-built nanobot onto the Universal Developer Image (UDI) so that
+# a Dev Spaces workspace has nanobot available immediately without any on-start
+# install step.  Follows the same multi-stage pattern as the standalone
+# Containerfile but uses UDI as the final runtime (shell, git, dev tooling
+# all included) instead of ubi9-minimal.
+#
+# Build stages 1–3 are identical to deployment/Containerfile.  The final stage
+# swaps ubi9-minimal for UDI and configures the image for OpenShift's arbitrary
+# UID model (UID 10001 / group 0 / g+rwX).
+#
+# Build (from nanobot repo root):
+#   podman build \
+#     -t quay.io/<your-org>/nanobot-devspaces:latest \
+#     -f deployment/Containerfile-devspaces .
+#
+# Push:
+#   podman push quay.io/<your-org>/nanobot-devspaces:latest
+#
+# Update nanobot:
+#   Rebuild with --no-cache and repush; the devfile image ref picks it up on
+#   the next workspace restart (DevSpaces pulls Always by default).
+
+# ── Stage 1: WebUI build ──────────────────────────────────────────────────────
+FROM quay.io/hummingbird/nodejs:24-builder AS webui-builder
+
+WORKDIR /app
+COPY webui/package.json webui/package-lock.json ./webui/
+WORKDIR /app/webui
+RUN npm ci
+COPY webui/ ./
+COPY packages/client-events/ /app/packages/client-events/
+RUN mkdir -p /app/nanobot/web && npm run build
+
+# ── Stage 2: uv binary source ─────────────────────────────────────────────────
+FROM ghcr.io/astral-sh/uv:latest AS uv-source
+
+# ── Stage 3: Python dependency build ─────────────────────────────────────────
+FROM quay.io/hummingbird/python:3.12-builder AS python-builder
+
+COPY --from=uv-source /uv /usr/local/bin/uv
+
+RUN dnf install -y \
+        ca-certificates \
+        git \
+        bubblewrap \
+        openssh-clients \
+        file-libs \
+    && dnf clean all
+
+WORKDIR /app
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+RUN uv venv --seed "$VIRTUAL_ENV"
+
+ARG NANOBOT_EXTRAS=
+COPY pyproject.toml README.md LICENSE THIRD_PARTY_NOTICES.md hatch_build.py ./
+RUN mkdir -p nanobot && touch nanobot/__init__.py && \
+    if [ -n "$NANOBOT_EXTRAS" ]; then \
+        NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install \
+            --python "$VIRTUAL_ENV/bin/python" --no-cache ".[${NANOBOT_EXTRAS}]"; \
+    else \
+        NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install \
+            --python "$VIRTUAL_ENV/bin/python" --no-cache .; \
+    fi && \
+    rm -rf nanobot
+
+COPY nanobot/ nanobot/
+COPY scripts/install_channel_dependencies.py scripts/
+COPY --from=webui-builder /app/nanobot/web/dist/ nanobot/web/dist/
+RUN NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install \
+        --python "$VIRTUAL_ENV/bin/python" --no-cache .
+
+ARG NANOBOT_CHANNELS=whatsapp
+RUN for channel in $(printf '%s' "$NANOBOT_CHANNELS" | tr ',' ' '); do \
+        python -m scripts.install_channel_dependencies "$channel"; \
+    done
+
+COPY render-config.json ./
+
+# ── Stage 4: UDI runtime (Dev Spaces) ────────────────────────────────────────
+FROM quay.io/devfile/universal-developer-image:ubi9-latest
+
+USER root
+
+# Install nanobot's runtime system dependencies on top of UDI.
+# UDI is UBI9-based + dnf available + bubblewrap may already be present;
+# the install is idempotent.
+RUN dnf install -y \
+        bubblewrap \
+        openssh-clients \
+        file-libs \
+        util-linux \
+    && dnf clean all
+
+# Copy the pre-built Python venv and application source
+COPY --from=python-builder /app/.venv           /app/.venv
+COPY --from=python-builder /app/nanobot         /app/nanobot
+COPY --from=python-builder /app/scripts         /app/scripts
+COPY --from=python-builder /app/render-config.json /app/render-config.json
+COPY --from=python-builder /app/pyproject.toml  /app/pyproject.toml
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Pre-create the nanobot data dir under the UDI home directory (/home/user).
+# chown 10001:0 + g+rwX allows OpenShift's arbitrary UID to write here.
+RUN mkdir -p /home/user/.nanobot && \
+    chown -R 10001:0 /home/user/.nanobot /app/.venv /app/nanobot /app/scripts && \
+    chmod -R g+rwX  /home/user/.nanobot /app/.venv /app/nanobot /app/scripts
+
+COPY entrypoint.sh /usr/local/bin/nanobot-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/nanobot-entrypoint.sh && \
+    chmod +x /usr/local/bin/nanobot-entrypoint.sh
+
+ENV HOME=/home/user
+ENV PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1
+
+# Gateway health endpoint (18790) and WebUI/WebSocket channel (8765)
+EXPOSE 18790 8765
+
+# Drop back to UID 10001 (UDI convention); OpenShift will assign an arbitrary
+# UID from the project's range — g+rwX above ensures write access regardless.
+USER 10001

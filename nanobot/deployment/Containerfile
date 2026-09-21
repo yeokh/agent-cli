@@ -1,0 +1,151 @@
+# nanobot — Hardened Multi-Stage Container Image
+# Base images: Project Hummingbird (quay.io/hummingbird) for build stages,
+#              Red Hat UBI9 Minimal for the runtime stage.
+#
+# Key differences from the upstream Dockerfile:
+#   - nodejs:24-bookworm-slim   → quay.io/hummingbird/nodejs:24-builder
+#   - uv:python3.12-bookworm-slim → uv binary copied from ghcr.io/astral-sh/uv
+#                                   into quay.io/hummingbird/python:3.12-builder
+#   - Final runtime stage       → registry.access.redhat.com/ubi9/ubi-minimal
+#   - apt-get → microdnf/dnf; openssh-client → openssh-clients;
+#     libmagic1 → file-libs
+#   - OpenShift arbitrary-UID support: chown nanobot:0 + g+rwX so any UID
+#     in the project's range can write the data dir (no root required on OCP).
+#
+# Build (from nanobot repo root):
+#   podman build -t nanobot -f deployment/Containerfile .
+#
+# Build with optional extras:
+#   podman build -t nanobot -f deployment/Containerfile \
+#     --build-arg NANOBOT_EXTRAS=slack,discord .
+#
+# Run (local):
+#   podman run --rm -it \
+#     -e ANTHROPIC_API_KEY=<key> \
+#     -e NANOBOT_WEB_TOKEN=<token> \
+#     -p 18790:18790 -p 8765:8765 \
+#     -v nanobot-data:/home/nanobot/.nanobot \
+#     nanobot
+
+# ── Stage 1: WebUI build ──────────────────────────────────────────────────────
+FROM quay.io/hummingbird/nodejs:24-builder AS webui-builder
+
+WORKDIR /app
+COPY webui/package.json webui/package-lock.json ./webui/
+WORKDIR /app/webui
+RUN npm ci
+COPY webui/ ./
+COPY packages/client-events/ /app/packages/client-events/
+RUN mkdir -p /app/nanobot/web && npm run build
+
+# ── Stage 2: uv binary source ─────────────────────────────────────────────────
+# Extract only the static uv binary — never carry the Debian-based uv image
+# into any final output layer.
+FROM ghcr.io/astral-sh/uv:latest AS uv-source
+
+# ── Stage 3: Python dependency build ─────────────────────────────────────────
+FROM quay.io/hummingbird/python:3.12-builder AS python-builder
+
+# Inject the uv binary from the dedicated stage
+COPY --from=uv-source /uv /usr/local/bin/uv
+
+# Build-time system dependencies (dnf available in -builder variant only)
+#   openssh-client  → openssh-clients
+#   libmagic1       → file-libs  (provides libmagic.so.1)
+RUN dnf install -y \
+        ca-certificates \
+        git \
+        bubblewrap \
+        openssh-clients \
+        file-libs \
+    && dnf clean all
+
+WORKDIR /app
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+RUN uv venv --seed "$VIRTUAL_ENV"
+
+# Install Python dependencies first (separate cached layer)
+ARG NANOBOT_EXTRAS=
+COPY pyproject.toml README.md LICENSE THIRD_PARTY_NOTICES.md hatch_build.py ./
+RUN mkdir -p nanobot && touch nanobot/__init__.py && \
+    if [ -n "$NANOBOT_EXTRAS" ]; then \
+        NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install \
+            --python "$VIRTUAL_ENV/bin/python" --no-cache ".[${NANOBOT_EXTRAS}]"; \
+    else \
+        NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install \
+            --python "$VIRTUAL_ENV/bin/python" --no-cache .; \
+    fi && \
+    rm -rf nanobot
+
+# Copy full source + install final package
+COPY nanobot/ nanobot/
+COPY scripts/install_channel_dependencies.py scripts/
+COPY --from=webui-builder /app/nanobot/web/dist/ nanobot/web/dist/
+RUN NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install \
+        --python "$VIRTUAL_ENV/bin/python" --no-cache .
+
+# Pre-install declared channel dependencies
+ARG NANOBOT_CHANNELS=whatsapp
+RUN for channel in $(printf '%s' "$NANOBOT_CHANNELS" | tr ',' ' '); do \
+        python -m scripts.install_channel_dependencies "$channel"; \
+    done
+
+COPY render-config.json ./
+
+# ── Stage 4: UBI9 Minimal runtime ────────────────────────────────────────────
+FROM registry.access.redhat.com/ubi9/ubi-minimal AS final
+
+# Runtime system dependencies:
+#   python3.12   — shared library backing the venv Python binary
+#   util-linux   — provides setpriv (privilege drop in entrypoint.sh)
+#   shadow-utils — provides useradd
+WORKDIR /app
+
+RUN microdnf install -y \
+        ca-certificates \
+        git \
+        bubblewrap \
+        openssh-clients \
+        file-libs \
+        python3.12 \
+        util-linux \
+        shadow-utils \
+    && microdnf clean all
+
+# Copy the pre-built Python venv and application source from the builder
+COPY --from=python-builder /app/.venv           /app/.venv
+COPY --from=python-builder /app/nanobot         /app/nanobot
+COPY --from=python-builder /app/scripts         /app/scripts
+COPY --from=python-builder /app/render-config.json /app/render-config.json
+COPY --from=python-builder /app/pyproject.toml  /app/pyproject.toml
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Create the non-root nanobot user.
+# chown :0 + g+rwX ensures OpenShift's injected arbitrary UID (not 1000)
+# can still write to the data and venv directories without needing root.
+RUN useradd -m -u 1000 -s /bin/bash nanobot && \
+    mkdir -p /home/nanobot/.nanobot && \
+    chown -R nanobot:0 /home/nanobot /app/.venv && \
+    chmod -R g+rwX /home/nanobot /app/.venv
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && \
+    chmod +x /usr/local/bin/entrypoint.sh
+
+# Start as root so the entrypoint can chown a freshly-mounted persistent disk
+# (Render) before dropping privileges to nanobot via setpriv.
+# On OpenShift the SCC assigns an arbitrary non-root UID; the root check in
+# entrypoint.sh is then skipped and the g+rwX dirs above permit writing.
+USER root
+ENV HOME=/home/nanobot
+ENV PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1
+
+# Gateway health endpoint (18790) and WebUI/WebSocket channel (8765)
+EXPOSE 18790 8765
+
+ENTRYPOINT ["entrypoint.sh"]
+CMD ["status"]

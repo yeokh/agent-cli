@@ -1,0 +1,103 @@
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# NetworkPolicy — litellm-gw namespace
+#
+# Restricts all pod traffic to only what LiteLLM requires:
+#
+#  INGRESS  port 4000/TCP  ← OpenShift router + same-namespace pods only
+#  EGRESS   port 443/TCP   → external cloud providers (OpenAI, Anthropic,
+#                            OpenRouter, Red Hat MaaS) — external IPs only
+#  EGRESS   port 8000/TCP  → vLLM in-cluster service (adjust labels below)
+#  EGRESS   port 53/UDP+TCP → OpenShift DNS (kube-dns)
+#
+# NOTE: Standard Kubernetes NetworkPolicy cannot filter by hostname/FQDN.
+# The HTTPS egress rule allows port 443 to all non-RFC-1918 addresses, which
+# covers OpenAI, Anthropic, OpenRouter and Red Hat MaaS. If you need strict
+# per-domain egress filtering add an EgressFirewall (OCP) or Cilium policy.
+#
+# Apply:
+#   oc apply -f networkpolicy-litellm-gw.yaml -n litellm-gw
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: litellm-gw-netpol
+  namespace: litellm-gw
+  labels:
+    app: litellm-gw
+spec:
+  # Applies to LiteLLM pods only
+  podSelector:
+    matchLabels:
+      app: litellm-gw
+  policyTypes:
+  - Ingress
+  - Egress
+
+  # ── INGRESS ────────────────────────────────────────────────────────────────
+  ingress:
+
+  # 1. OpenShift router → pod:4000
+  #    Uses the real namespace label from 'oc get namespace openshift-ingress --show-labels'
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          network.openshift.io/policy-group: ingress
+    ports:
+    - protocol: TCP
+      port: 4000
+
+  # 2. Same-namespace pods → pod:4000
+  #    Allows in-namespace health checks or sidecar access
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 4000
+
+  # ── EGRESS ─────────────────────────────────────────────────────────────────
+  egress:
+
+  # 1. DNS — OpenShift internal DNS resolver
+  #    Namespace label verified via: oc get namespace openshift-dns --show-labels
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # 2. HTTPS to external cloud LLM providers (port 443)
+  #    Covers:  api.openai.com
+  #             api.anthropic.com
+  #             openrouter.ai
+  #             maas-rhdp.apps.maas.redhatworkshops.io
+  #    RFC-1918 private ranges are excluded to prevent lateral movement.
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8        # RFC-1918 — cluster/pod network
+        - 172.16.0.0/12     # RFC-1918 — cluster/pod network
+        - 192.168.0.0/16    # RFC-1918 — host/node network
+    ports:
+    - protocol: TCP
+      port: 443
+
+  # 3. vLLM in-cluster service (port 8000)
+  #    Update the namespace label and pod label to match your vLLM deployment.
+  #    Comment out this block if vLLM runs outside the cluster (e.g. bare-metal)
+  #    or if you route to it via an ExternalName Service (already covered by rule 2).
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: vllm   # ← change to your vLLM namespace
+      podSelector:
+        matchLabels:
+          app: vllm                            # ← change to your vLLM pod label
+    ports:
+    - protocol: TCP
+      port: 8000

@@ -1,0 +1,121 @@
+================================================================================
+                    PI SUB-AGENT QUICK REFERENCE
+================================================================================
+
+WHAT ARE SUB-AGENTS?
+  Isolated pi processes spawned from a parent session. Each has:
+  - Fresh context window
+  - Specialization (scout, planner, reviewer, worker)
+  - Isolated model and tools
+  - Real-time streaming output
+
+THREE MODES
+  1. SINGLE: One agent, one task
+     { agent: "scout", task: "Find auth code" }
+
+  2. PARALLEL: Multiple tasks run concurrently (max 8, 4 concurrent)
+     { tasks: [{ agent: "scout", task: "..." }, { agent: "scout", task: "..." }] }
+
+  3. CHAIN: Sequential with {previous} context passing
+     { chain: [
+       { agent: "scout", task: "Find code" },
+       { agent: "planner", task: "Plan based on {previous}" }
+     ]}
+
+STANDARD AGENTS
+  scout   → Haiku  | Fast recon, compressed output
+  planner → Sonnet | Creates implementation plans
+  reviewer→ Sonnet | Code review and feedback
+  worker  → Sonnet | General coding and implementation
+
+INTERACTIVE EXAMPLES
+  # Single agent
+  Use scout to find all authentication code
+
+  # Chain via template
+  /implement add Redis caching to session store
+
+  # Another workflow
+  /scout-and-plan refactor auth to OAuth
+
+  # Parallel scouts
+  Run 3 scouts in parallel: auth, models, providers
+
+INSTALLATION
+  mkdir -p ~/.pi/agent/extensions/subagent
+  ln -sf $(pwd)/examples/extensions/subagent/index.ts ~/.pi/agent/extensions/subagent/
+  ln -sf $(pwd)/examples/extensions/subagent/agents.ts ~/.pi/agent/extensions/subagent/
+
+  mkdir -p ~/.pi/agent/agents
+  for f in examples/extensions/subagent/agents/*.md; do
+    ln -sf $(pwd)/$f ~/.pi/agent/agents/$(basename "$f")
+  done
+
+TOOL PARAMETERS
+  agent      string             Agent name (single mode)
+  task       string             Task description
+  tasks      Array<{...}>       Parallel tasks
+  chain      Array<{...}>       Sequential chain
+  agentScope "user"/"project"/"both"  Which agents to load (default: user)
+  cwd        string             Working directory (optional)
+
+OUTPUT INCLUDES
+  - Status icon (✓/✗/⏳)
+  - Last 10 items (collapsed) or all items (expanded)
+  - Usage: turns, ↑input, ↓output, R/W cache, $cost, ctx:tokens, model
+
+EXPANSION (Ctrl+O)
+  - Full task and output
+  - All tool calls with formatted arguments
+  - Markdown-rendered final output
+  - Per-task usage for chains/parallel
+
+COMMON WORKFLOWS
+  scout → planner → worker       (research to implementation)
+  [scout-A, scout-B] → worker    (parallel analysis + synthesis)
+  worker → reviewer → worker     (code review iteration)
+  [reviewer-A, reviewer-B] → worker (multi-angle review)
+
+SECURITY
+  Default: Load user agents only (~/.pi/agent/agents)
+  Project agents (.pi/agents) require agentScope: "both"
+  Interactive mode prompts on untrusted projects
+  Project agents can execute bash/file operations
+
+WORKFLOW TEMPLATES (/command)
+  /implement <query>              scout → planner → worker
+  /scout-and-plan <query>         scout → planner
+  /implement-and-review <query>   worker → reviewer → worker
+
+LIMITS
+  Max 8 parallel tasks
+  Max 4 concurrent (others queue)
+  50 KB output cap per task (parallel mode only)
+  Full results always in tool details
+
+ERROR HANDLING
+  Chain stops at first failure
+  Shows which step failed + error message
+  User abort (Ctrl+C) propagates to subprocess
+  Exit codes captured and reported
+
+FILES CREATED FOR YOU
+  subagent-demo.md              → Overview and concepts
+  subagent-interactive-demo.ts  → Runnable TypeScript demo
+  subagent-workflow-example.md  → 5 real-world examples
+  subagent-api-reference.md     → Complete API documentation
+
+QUICK START
+  pi
+  > /implement add database connection pooling
+  (scout finds db code → planner creates plan → worker implements)
+
+  pi
+  > Use scout to find all error handling patterns
+  (single agent for quick lookup)
+
+  pi
+  > Run 2 scouts: find models and find providers
+  (parallel execution for parallel analysis)
+
+================================================================================

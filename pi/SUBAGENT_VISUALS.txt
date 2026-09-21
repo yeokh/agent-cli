@@ -1,0 +1,375 @@
+================================================================================
+                    SUB-AGENT EXECUTION MODELS
+================================================================================
+
+MODE 1: SINGLE AGENT
+────────────────────────────────────────────────────────────────────────────
+
+  Parent Session
+  ├─ Agent: scout
+  │  ├─ Task: "Find auth code"
+  │  ├─ Context: Fresh (isolated subprocess)
+  │  ├─ Tools: read, grep, find, ls, bash
+  │  ├─ Model: claude-haiku-4-5
+  │  └─ Output: Compressed context summary
+  └─ Result: Usage stats (turns, tokens, cost)
+
+  User Input:  "Use scout to find all authentication code"
+  Flow:        Parent → [spawn scout] → Get output → Display result
+  Time:        T (one subprocess)
+
+
+MODE 2: PARALLEL EXECUTION
+────────────────────────────────────────────────────────────────────────────
+
+  Parent Session
+  ├─ Task 1: scout "Find models"      ⏳ running
+  ├─ Task 2: scout "Find providers"   ⏳ running
+  └─ Task 3: scout "Find middleware"  ⏳ running
+      ↓
+    (all run concurrently for ~T max(task1, task2, task3))
+      ↓
+  Results Combined:
+  ├─ scout-1: Models summary + stats
+  ├─ scout-2: Providers summary + stats
+  └─ scout-3: Middleware summary + stats
+
+  User Input:  "Run 3 scouts in parallel: models, providers, middleware"
+  Flow:        Parent → [spawn 3 scouts] → Collect outputs (streaming) → Combine
+  Time:        T (one subprocess time, not 3×T)
+  Limits:      Max 8 tasks, 4 concurrent (others queue)
+
+
+MODE 3: CHAIN EXECUTION (Sequential with Context)
+────────────────────────────────────────────────────────────────────────────
+
+  User Input:  "/implement add Redis caching"
+  
+  Step 1: scout
+  ────────────────────────────────────────────────────────────────────────
+  ┌─ Task: "Find caching patterns"
+  │  └─ Output: "File A has memcached, File B uses in-memory cache, ..."
+  └─ {previous} = entire output above
+
+  Step 2: planner (receives {previous})
+  ────────────────────────────────────────────────────────────────────────
+  ┌─ Task: "Plan Redis caching for {previous}"
+  │  └─ Input task becomes: "Plan Redis caching for File A has memcached..."
+  │  └─ Output: "1. Add Redis client, 2. Refactor memcached, 3. Add tests"
+  └─ {previous} = entire output above
+
+  Step 3: worker (receives {previous})
+  ────────────────────────────────────────────────────────────────────────
+  ┌─ Task: "Implement according to {previous}"
+  │  └─ Input task becomes: "Implement according to 1. Add Redis client..."
+  │  └─ Output: Actual code implementation
+  └─ {previous} = not used in this final step (but available)
+
+  Result: Final output from worker + all step stats
+  
+  Error Handling:
+  ─────────────────────────────────────────────────────────────────────────
+  If any step fails (exit code != 0, stopReason = "error"):
+    Chain stops immediately ✗
+    Returns: Error message from failed step
+    Includes: All previous successful steps in details
+
+
+STREAMING & REAL-TIME UPDATES
+────────────────────────────────────────────────────────────────────────────
+
+Collapsed View (default):
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ✓ scout [user]                                                          │
+│   → read src/auth.ts:1-50                                               │
+│   → grep authenticate src/                                              │
+│   Authentication uses custom middleware in src/auth/middleware.ts       │
+│   Key functions: authenticate(), validateToken()                        │
+│                                                                          │
+│   1 turn ↑2.1k ↓1.4k $0.0042 ctx:3.5k claude-haiku-4-5                │
+│   (Ctrl+O to expand)                                                    │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Expanded View (Ctrl+O):
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ✓ scout [user]                                                          │
+│                                                                          │
+│ ─── Task ───                                                            │
+│ Find all files that import the express module                           │
+│                                                                          │
+│ ─── Output ───                                                          │
+│ → read src/index.ts:1-20                                                │
+│ → grep -r "from 'express'" src/                                         │
+│                                                                          │
+│ ## Files Using Express                                                  │
+│ 1. src/index.ts - Main server file                                      │
+│ 2. src/routes/api.ts - API endpoints                                    │
+│ 3. src/middleware/auth.ts - Authentication                              │
+│                                                                          │
+│ 1 turn ↑2.1k ↓1.4k $0.0042 ctx:3.5k claude-haiku-4-5                │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Parallel Execution Live Updates:
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ⏳ parallel: 1/3 done, 2 running...                                     │
+│   ✓ scout [user]   (completed)                                          │
+│   ⏳ scout [user]   (running...)                                         │
+│   ⏳ scout [user]   (running...)                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+↓ (as each completes)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ✓ parallel: 3/3 done                                                    │
+│                                                                          │
+│ ─── scout-1                     ✓                                        │
+│   Found 5 model files...                                                │
+│   1 turn ↑1.2k ↓2.1k ...                                                │
+│                                                                          │
+│ ─── scout-2                     ✓                                        │
+│   Found 3 provider implementations...                                    │
+│   1 turn ↑0.8k ↓1.5k ...                                                │
+│                                                                          │
+│ ─── scout-3                     ✓                                        │
+│   Found 8 middleware components...                                      │
+│   1 turn ↑0.9k ↓1.8k ...                                                │
+│                                                                          │
+│ Total: 3 turns ↑3.0k ↓5.4k $0.0186 ctx:9.8k                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+AGENT SPECIALIZATION
+────────────────────────────────────────────────────────────────────────────
+
+scout (Haiku)
+  Purpose:  Fast reconnaissance
+  Context:  Optimized for exploration
+  Output:   Compressed, structured findings
+  Cost:     Lowest
+  Use when: Need quick overview, gathering facts
+
+  Example task:
+  "Find all authentication middleware. List file paths and key functions."
+
+  Example output:
+  ## Files Found
+  - src/auth/middleware.ts
+  - src/auth/strategies/jwt.ts
+  - src/auth/strategies/oauth.ts
+  
+  ## Key Functions
+  - authenticate(req, res, next)
+  - validateToken(token)
+
+
+planner (Sonnet)
+  Purpose:  Create structured plans
+  Context:  Medium-length, planning context
+  Output:   Detailed implementation plans
+  Cost:     Medium
+  Use when: Need architecture, strategy, next steps
+
+  Example task:
+  "Based on {previous}, create a plan to refactor auth to OAuth"
+
+  Example output:
+  ## Migration Plan
+  1. Add OAuth provider configuration
+  2. Implement OAuth flow handlers
+  3. Update token validation
+  4. Create migration tests
+  5. Document new OAuth process
+
+
+reviewer (Sonnet)
+  Purpose:  Code review, quality assessment
+  Context:  Medium-length, review context
+  Output:   Issues, improvements, recommendations
+  Cost:     Medium
+  Use when: Need feedback, quality checks
+
+  Example task:
+  "Review this code for security issues"
+
+  Example output:
+  ## Security Findings
+  - Missing CSRF protection (HIGH)
+  - SQL injection risk in query (CRITICAL)
+  - Missing input validation (MEDIUM)
+  
+  ## Recommendations
+  1. Add CSRF tokens to forms
+  2. Use parameterized queries
+  3. Implement input validation
+
+
+worker (Sonnet)
+  Purpose:  General-purpose implementation
+  Context:  Full context, all tools
+  Output:   Code, implementations, changes
+  Cost:     Medium
+  Use when: Need to write code, implement features
+
+  Example task:
+  "Implement OAuth caching based on {previous}"
+
+  Example output:
+  [Actual code changes with full implementation]
+
+
+TYPICAL WORKFLOW PATTERNS
+────────────────────────────────────────────────────────────────────────────
+
+Pattern 1: Research → Planning → Implementation
+┌──────────┐     ┌─────────┐     ┌────────┐
+│  scout   │ --> │ planner │ --> │ worker │
+└──────────┘     └─────────┘     └────────┘
+    Haiku           Sonnet          Sonnet
+   (2.1k)          (1.8k)          (3.2k)
+   tokens          tokens          tokens
+
+Pattern 2: Parallel Analysis + Synthesis
+┌────────────┐
+│  scout-1   │ ──┐
+└────────────┘   │
+                 └──> ┌────────┐
+┌────────────┐   |   │ worker │
+│  scout-2   │ ──┤   └────────┘
+└────────────┘   │
+                 └──> (synthesizes all results)
+┌────────────┐
+│  scout-3   │ ──┘
+└────────────┘
+
+Pattern 3: Code Review Iteration
+┌────────┐     ┌──────────┐     ┌────────┐
+│ worker │ --> │ reviewer │ --> │ worker │ (with feedback)
+└────────┘     └──────────┘     └────────┘
+  (write)       (critique)       (improve)
+
+Pattern 4: Multi-angle Review
+┌──────────────────┐
+│ security-review  │ ──┐
+└──────────────────┘   │
+                       └──> ┌────────┐
+┌──────────────────┐   |   │ worker │
+│performance-review├───┤   └────────┘
+└──────────────────┘   |   (prioritize
+                       |    fixes)
+┌──────────────────┐   │
+│ architecture-rev │ ──┘
+└──────────────────┘
+
+
+EXECUTION TIMELINE
+────────────────────────────────────────────────────────────────────────────
+
+Single Agent:
+  T=0ms   Parent spawns subprocess
+  T=100ms Subagent receives task, starts processing
+  T=200ms Tool calls streaming back (real-time)
+  T=500ms Subagent completes
+  T=510ms Result displayed to user
+  Total:  ~510ms
+
+Parallel (3 tasks, 4 concurrent):
+  T=0ms     Parent spawns 3 subprocesses
+  T=100ms   All 3 start processing
+  T=200ms   First scout completes, result streamed
+  T=350ms   Second scout completes, result streamed
+  T=480ms   Third scout completes, result streamed
+  T=490ms   Aggregated result displayed
+  Total:    ~490ms (not 3× single time)
+
+Chain (3 steps):
+  T=0ms     Parent spawns step 1 (scout)
+  T=500ms   Scout completes, {previous} prepared
+  T=510ms   Parent spawns step 2 (planner) with {previous}
+  T=1000ms  Planner completes, {previous} prepared
+  T=1010ms  Parent spawns step 3 (worker) with {previous}
+  T=1500ms  Worker completes
+  T=1510ms  Final result displayed
+  Total:    ~1510ms (sequential, not parallel)
+
+
+RESULT STRUCTURE
+────────────────────────────────────────────────────────────────────────────
+
+Content (displayed to user):
+├─ type: "text"
+├─ text: "Final output from subagent"
+└─ (rendered in chat)
+
+Details (metadata, not displayed):
+├─ mode: "single" | "parallel" | "chain"
+├─ agentScope: "user" | "project" | "both"
+├─ projectAgentsDir: "/path/or/null"
+└─ results: [
+    {
+      agent: "scout",
+      agentSource: "user",
+      task: "original task",
+      exitCode: 0,
+      messages: [full LLM conversation],
+      stderr: "",
+      usage: {
+        input: 2100,
+        output: 1400,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: 0.0042,
+        contextTokens: 3500,
+        turns: 1
+      },
+      model: "claude-haiku-4-5",
+      stopReason: "end"
+    }
+  ]
+
+
+SECURITY MODEL
+────────────────────────────────────────────────────────────────────────────
+
+Default (agentScope: "user"):
+  ✓ Load: ~/.pi/agent/agents/*.md (user-level)
+  ✓ Safe: Controlled, user-created agents
+  ✗ Load: .pi/agents/*.md (project-level)
+
+With agentScope: "project":
+  ✗ Load: ~/.pi/agent/agents/*.md (user-level)
+  ✓ Load: .pi/agents/*.md (project-level, REPO-CONTROLLED)
+  ⚠ Warning: Project agents can execute bash/file operations
+
+With agentScope: "both":
+  ✓ Load: ~/.pi/agent/agents/*.md (user-level)
+  ✓ Load: .pi/agents/*.md (project-level, REPO-CONTROLLED)
+  ⚠ Warning: Both sources available, project overrides user by name
+  ⚠ Prompt: Interactive mode prompts on untrusted projects
+
+Trust Model:
+  Repository trusted?
+    ├─ Yes: Skip confirmation
+    └─ No: Prompt before running project agents
+
+
+OUTPUT LIMITS
+────────────────────────────────────────────────────────────────────────────
+
+Single mode:
+  ├─ Display: All output (no truncation)
+  └─ Details: Full messages array
+
+Parallel mode:
+  ├─ Per task: First 50 KB displayed
+  ├─ Overflow: "Output truncated... See details for full result"
+  └─ Details: Full messages array (no truncation)
+
+Expanded view:
+  ├─ All items shown
+  ├─ Tool calls formatted
+  └─ Final output as Markdown
+
+Collapsed view:
+  ├─ Last 10 items shown
+  ├─ Earlier items: "... N earlier items"
+  └─ Hint: "(Ctrl+O to expand)"
+
+================================================================================

@@ -1,0 +1,33 @@
+# Gateway Route (health endpoint + API)
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: nanobot-gateway
+  labels:
+    app: nanobot
+spec:
+  to:
+    kind: Service
+    name: nanobot
+  port:
+    targetPort: gateway
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+# WebUI / WebSocket Route
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: nanobot-webui
+  labels:
+    app: nanobot
+spec:
+  to:
+    kind: Service
+    name: nanobot
+  port:
+    targetPort: webui
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

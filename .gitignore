@@ -10,6 +10,7 @@ __pycache__/
 .Python
 
 # Virtual environments
+.venv/
 venv/
 env/
 ENV/
@@ -45,3 +46,9 @@ wrk/
 
 # Data files
 *.dta
+
+# Go module cache
+go/pkg/mod/
+
+# Compiled binaries
+tools/pcrypt/pcrypt
