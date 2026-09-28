@@ -1,17 +1,17 @@
 # Add to Software Catalog cluster-wide or by namespace
-# oc apply -f pydantic-agent-catalog-template.yaml -n openshift
-# oc apply -f pydantic-agent-catalog-template.yaml
+# oc apply -f pydantic-assistant-catalog-template.yaml -n openshift
+# oc apply -f pydantic-assistant-catalog-template.yaml
 #
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: pydantic-agent-template
+  name: pydantic-assistant-template
   annotations:
-    openshift.io/display-name: "Pydantic AI Agent (Web UI)"
-    description: "Deploys the Pydantic AI file-processing agent with a Flask web UI."
+    openshift.io/display-name: "Pydantic Assistant (Chat Web UI)"
+    description: "Deploys the interactive multi-turn AI chat assistant built on Pydantic AI and Flask."
     openshift.io/provider-display-name: "RH Workshop"
     iconClass: "icon-python"
-    tags: "python,pydantic-ai,agent,web"
+    tags: "python,pydantic-ai,chat,ai-assistant,web"
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -30,20 +30,26 @@ objects:
             app: "${APP_NAME}"
         spec:
           containers:
-            - name: pydantic-agent
+            - name: pydantic-assistant
               image: "${IMAGE_NAME}"
               ports:
                 - containerPort: ${{PORT}}
                   protocol: TCP
               env:
-                - name: RUN_MODE
-                  value: "${RUN_MODE}"
                 - name: API_PROVIDER
                   value: "${API_PROVIDER}"
                 - name: MODEL
                   value: "${MODEL}"
                 - name: MAX_TURNS
                   value: "${MAX_TURNS}"
+                - name: MAX_OUTPUT_TOKENS
+                  value: "${MAX_OUTPUT_TOKENS}"
+                - name: ALLOW_SHELL
+                  value: "${ALLOW_SHELL}"
+                - name: PORT
+                  value: "${PORT}"
+                - name: HOST
+                  value: "0.0.0.0"
               volumeMounts:
                 - name: agent-volume
                   mountPath: /app/agent
@@ -62,8 +68,9 @@ objects:
                 httpGet:
                   path: /
                   port: ${{PORT}}
-                initialDelaySeconds: 10
+                initialDelaySeconds: 15
                 periodSeconds: 30
+                failureThreshold: 3
               readinessProbe:
                 httpGet:
                   path: /
@@ -146,7 +153,7 @@ parameters:
   - name: APP_NAME
     displayName: Application Name
     description: The name assigned to all application objects.
-    value: pydantic-agent
+    value: pydantic-assistant
     required: true
   - name: IMAGE_NAME
     displayName: Container Image
@@ -156,12 +163,7 @@ parameters:
   - name: PORT
     displayName: Container Port
     description: The internal port the container listens on.
-    value: "8080"
-    required: true
-  - name: RUN_MODE
-    displayName: Run Mode
-    description: "Agent run mode: 'web' for Flask UI, 'agent' for CLI."
-    value: "web"
+    value: "8081"
     required: true
   - name: API_PROVIDER
     displayName: API Provider
@@ -170,13 +172,23 @@ parameters:
     required: true
   - name: MODEL
     displayName: Model
-    description: Model name to use for the agent.
+    description: Model name to use for the assistant.
     value: "claude-opus-4-5"
     required: true
   - name: MAX_TURNS
     displayName: Max Turns
-    description: Maximum number of agent turns per job.
+    description: Maximum number of conversation turns.
     value: "50"
+    required: true
+  - name: MAX_OUTPUT_TOKENS
+    displayName: Max Output Tokens
+    description: Maximum number of tokens in each model response.
+    value: "16384"
+    required: true
+  - name: ALLOW_SHELL
+    displayName: Allow Shell Commands
+    description: "Whether to allow the agent to run shell commands (true/false)."
+    value: "false"
     required: true
   - name: AGENT_STORAGE_SIZE
     displayName: Agent Volume Size

@@ -1,6 +1,6 @@
 # Add to Software Catalog cluster-wide or by namespace
-# oc apply -f adk-agent-template.yaml -n openshift
-# oc apply -f adk-agent-template.yaml
+# oc apply -f adk-agent-catalog-template.yaml -n openshift
+# oc apply -f adk-agent-catalog-template.yaml
 #
 apiVersion: template.openshift.io/v1
 kind: Template
@@ -44,6 +44,13 @@ objects:
                   value: "${MODEL}"
                 - name: MAX_TURNS
                   value: "${MAX_TURNS}"
+              volumeMounts:
+                - name: agent-volume
+                  mountPath: /app/agent
+                - name: input-volume
+                  mountPath: /app/input
+                - name: output-volume
+                  mountPath: /app/output
               resources:
                 requests:
                   cpu: 250m
@@ -63,6 +70,52 @@ objects:
                   port: ${{PORT}}
                 initialDelaySeconds: 5
                 periodSeconds: 10
+          volumes:
+            - name: agent-volume
+              persistentVolumeClaim:
+                claimName: "${APP_NAME}-agent-pvc"
+            - name: input-volume
+              persistentVolumeClaim:
+                claimName: "${APP_NAME}-input-pvc"
+            - name: output-volume
+              persistentVolumeClaim:
+                claimName: "${APP_NAME}-output-pvc"
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: "${APP_NAME}-agent-pvc"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: "${AGENT_STORAGE_SIZE}"
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: "${APP_NAME}-input-pvc"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: "${INPUT_STORAGE_SIZE}"
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: "${APP_NAME}-output-pvc"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: "${OUTPUT_STORAGE_SIZE}"
   - apiVersion: v1
     kind: Service
     metadata:
@@ -124,4 +177,19 @@ parameters:
     displayName: Max Turns
     description: Maximum number of agent turns per job.
     value: "50"
+    required: true
+  - name: AGENT_STORAGE_SIZE
+    displayName: Agent Volume Size
+    description: Storage size for the agent configuration volume.
+    value: "1Gi"
+    required: true
+  - name: INPUT_STORAGE_SIZE
+    displayName: Input Volume Size
+    description: Storage size for the input files volume.
+    value: "5Gi"
+    required: true
+  - name: OUTPUT_STORAGE_SIZE
+    displayName: Output Volume Size
+    description: Storage size for the output files volume.
+    value: "5Gi"
     required: true
