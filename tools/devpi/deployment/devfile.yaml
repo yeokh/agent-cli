@@ -1,0 +1,70 @@
+# devpi DevSpaces workspace devfile
+#
+# Deploys devpi as a component inside an OpenShift DevSpaces workspace.
+# The devpi server is available at http://localhost:3141 from within the workspace,
+# and the ttyd terminal is accessible via the "devpi-terminal" endpoint.
+#
+# Usage:
+#   oc devspaces workspace create --devfile deployment/devfile.yaml
+#   OR register this devfile URL in the DevSpaces dashboard.
+#
+schemaVersion: 2.2.0
+metadata:
+  name: devpi-pypi-server
+  displayName: devpi PyPI Server
+  description: >
+    Private PyPI mirror/cache server with web terminal access.
+    Serves pre-loaded packages from requirements.txt immediately on startup.
+  tags:
+    - python
+    - pypi
+    - devpi
+    - offline
+
+components:
+  - name: devpi
+    container:
+      image: quay.io/<your-org>/devpi-server:latest
+      memoryLimit: 2Gi
+      memoryRequest: 512Mi
+      cpuLimit: "2"
+      cpuRequest: 250m
+
+      env:
+        - name: DEVPI_MODE
+          value: "ttyd"
+        # Air-gapped by default. Set to "root/pypi" to proxy upstream PyPI:
+        - name: DEVPI_BASES
+          value: ""
+        - name: PYTHONUNBUFFERED
+          value: "1"
+
+      endpoints:
+        # PyPI index endpoint — point pip at this URL
+        - name: devpi-pypi
+          targetPort: 3141
+          exposure: public
+          protocol: https
+          attributes:
+            type: main
+            discoverable: true
+            urlRewriteSupported: false
+        # ttyd web terminal endpoint
+        - name: devpi-terminal
+          targetPort: 7681
+          exposure: public
+          protocol: https
+          attributes:
+            type: main
+            cookiesAuthEnabled: true
+            discoverable: false
+            urlRewriteSupported: true
+            secure: true
+
+      volumeMounts:
+        - name: devpi-data
+          path: /data/devpi-server
+
+  - name: devpi-data
+    volume:
+      size: 10Gi

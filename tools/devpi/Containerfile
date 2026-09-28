@@ -1,0 +1,159 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# devpi PyPI Server with optional ttyd Web Terminal
+#
+# A single-container private PyPI mirror/cache server with web terminal access.
+# OpenShift DevSpaces / restricted-v2 SCC compatible (runs as arbitrary UID).
+#
+# ── Build ─────────────────────────────────────────────────────────────────────
+#
+#   # Standard build (downloads packages from requirements.txt at build time):
+#   podman build -t devpi-server:latest .
+#
+#   # Custom requirements file:
+#   podman build --build-arg REQUIREMENTS_FILE=my-reqs.txt -t devpi-server:latest .
+#
+#   # Disconnected build — pre-download packages on a connected machine first:
+#   #   pip download -r requirements.txt -d ./packages/
+#   # Then uncomment the "COPY packages/" line below and build without internet.
+#
+# ── Run ───────────────────────────────────────────────────────────────────────
+#
+#   # Standalone PyPI server (port 3141):
+#   podman run --rm -p 3141:3141 \
+#     -v devpi-data:/data/devpi-server \
+#     devpi-server:latest
+#
+#   # With ttyd web terminal (ports 3141 + 7681):
+#   podman run --rm -p 3141:3141 -p 7681:7681 \
+#     -e DEVPI_MODE=ttyd \
+#     -v devpi-data:/data/devpi-server \
+#     devpi-server:latest
+#
+#   # With additional packages mounted at runtime:
+#   podman run --rm -p 3141:3141 \
+#     -v /path/to/wheels:/packages:ro \
+#     -v devpi-data:/data/devpi-server \
+#     devpi-server:latest
+#
+# ── Configure pip ─────────────────────────────────────────────────────────────
+#
+#   pip config set global.index-url http://localhost:3141/root/local/+simple/
+#   pip config set global.trusted-host localhost
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+USER root
+
+# ── 1. System dependencies ────────────────────────────────────────────────────
+RUN microdnf install -y \
+        bash \
+        ca-certificates \
+        curl \
+        findutils \
+        python3.11 \
+        python3.11-pip \
+        shadow-utils \
+    && microdnf clean all \
+    && ln -sf /usr/bin/python3.11 /usr/local/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/local/bin/python \
+    && ln -sf /usr/bin/pip3.11   /usr/local/bin/pip3 \
+    && ln -sf /usr/bin/pip3.11   /usr/local/bin/pip
+
+# ── 2. ttyd — static binary, no extra libs required ───────────────────────────
+RUN curl -fsSL \
+        "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64" \
+        -o /usr/local/bin/ttyd \
+    && chmod +x /usr/local/bin/ttyd
+
+# ── 3. Python packages: devpi stack + twine (upload fallback) ─────────────────
+RUN pip3 install --no-cache-dir \
+        devpi-server \
+        devpi-client \
+        devpi-web \
+        twine
+
+# ── 4. Non-root user — uid 1001 / gid 0 for OpenShift restricted-v2 SCC ───────
+#    g+rwX on all dirs allows OpenShift's arbitrary injected UID (which lands in
+#    group 0) to write at runtime regardless of actual UID value.
+RUN useradd -m -u 1001 -g 0 -s /bin/bash devpi \
+    && mkdir -p /data/devpi-server /packages \
+    && chown -R 1001:0 /data /packages /home/devpi \
+    && chmod -R g+rwX  /data /packages /home/devpi
+
+# ── 5. Build-time package pre-loading ────────────────────────────────────────
+#
+#    Option A (default): download from PyPI at build time.
+#    Supply a requirements.txt with the packages you want available offline.
+#    Override the source file with: --build-arg REQUIREMENTS_FILE=other.txt
+#
+#    Option B (disconnected builds): pre-download on a connected host:
+#       pip download -r requirements.txt -d ./packages/
+#    Then uncomment the COPY line below, comment out the pip download RUN, and
+#    rebuild — no internet access needed.
+#
+ARG REQUIREMENTS_FILE=requirements.txt
+COPY ${REQUIREMENTS_FILE} /tmp/requirements.txt
+RUN pip3 download \
+        -r /tmp/requirements.txt \
+        -d /packages/ \
+    && chown -R 1001:0 /packages \
+    && chmod -R g+rwX  /packages \
+    || (echo "WARNING: pip download failed — continuing without pre-loaded packages." \
+        && chown -R 1001:0 /packages && chmod -R g+rwX /packages)
+
+# Option B: COPY pre-downloaded wheels (uncomment to use):
+# COPY packages/ /packages/
+# RUN chown -R 1001:0 /packages && chmod -R g+rwX /packages
+
+# ── 6. Entrypoint ─────────────────────────────────────────────────────────────
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# ── 7. Environment defaults ───────────────────────────────────────────────────
+ENV HOME=/home/devpi
+ENV TERM=xterm-256color
+ENV PYTHONUNBUFFERED=1
+
+# devpi-server settings
+ENV DEVPI_SERVERDIR=/data/devpi-server
+ENV DEVPI_HOST=0.0.0.0
+ENV DEVPI_PORT=3141
+
+# devpi admin credentials (change via Secret in OpenShift)
+ENV DEVPI_USER=root
+ENV DEVPI_PASSWORD=""
+
+# Index settings
+# DEVPI_INDEX: name of the local staging index under DEVPI_USER
+ENV DEVPI_INDEX=local
+# DEVPI_BASES: upstream index bases (empty = air-gapped; "root/pypi" = proxy PyPI)
+ENV DEVPI_BASES=""
+# DEVPI_UPSTREAM_URL: upstream PyPI URL (only used when DEVPI_BASES includes root/pypi)
+ENV DEVPI_UPSTREAM_URL=https://pypi.org/simple/
+
+# Runtime mode
+#   server — devpi-server only (port 3141)
+#   ttyd   — devpi-server + ttyd web terminal (ports 3141 + 7681)
+ENV DEVPI_MODE=server
+
+# Pre-loaded packages directory
+ENV PACKAGES_DIR=/packages
+
+# devpi-client config dir — /tmp stays writable under any UID
+ENV DEVPI_CLIENTDIR=/tmp/devpi-client
+
+# ── 8. Volumes ────────────────────────────────────────────────────────────────
+VOLUME ["/data/devpi-server", "/packages"]
+
+USER 1001
+WORKDIR /home/devpi
+
+# ── 9. Ports ──────────────────────────────────────────────────────────────────
+#   3141 — devpi PyPI server
+#   7681 — ttyd web terminal (active when DEVPI_MODE=ttyd)
+EXPOSE 3141 7681
+
+# ── 10. Start ─────────────────────────────────────────────────────────────────
+CMD ["/usr/local/bin/entrypoint.sh"]

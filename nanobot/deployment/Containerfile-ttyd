@@ -1,0 +1,104 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# nanobot + ttyd web terminal image (OpenShift-compatible)
+#
+# Installs nanobot-ai from PyPI via uv — no source build required.
+# The command that ttyd exposes is controlled by the NANOBOT_TTYD_CMD env var:
+#
+#   agent  (default) — nanobot interactive TUI agent session
+#   webui             — nanobot gateway + WebUI server (headless)
+#   bash              — plain bash shell with nanobot on PATH
+#
+# Requires Red Hat registry auth (pull secret) to pull base image.
+#
+# Build (context = deployment/ directory):
+#   podman build \
+#     -t nanobot-ttyd:v1 \
+#     -f deployment/Containerfile-ttyd \
+#     deployment/
+#
+# Run (local):
+#   podman run --rm -p 7681:7681 \
+#     -e ANTHROPIC_API_KEY=<key> \
+#     -v nanobot-data:/home/nanobot/.nanobot \
+#     nanobot-ttyd:v1
+#
+# Access: http://localhost:7681
+#
+# OpenShift notes:
+#   - Runs as uid 1001 (no root, compatible with restricted-v2 SCC)
+#   - Exposes port 7681 (unprivileged)
+#   - Set API keys and model via Secret → env vars in your Deployment spec
+#   - For webui mode also route ports 18790 (gateway) and 8765 (WebUI)
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM registry.redhat.io/ubi9/python-312-minimal:latest
+
+USER root
+
+# ── 1. System runtime dependencies ───────────────────────────────────────────
+RUN microdnf install -y \
+        ca-certificates \
+        git \
+        bubblewrap \
+        openssh-clients \
+        file-libs \
+    && microdnf clean all
+
+# ── 2. Static binaries: uv and ttyd ──────────────────────────────────────────
+# uv: Python package manager (static binary — no system Python needed for install)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# ttyd: web terminal server (static binary, no extra libs required)
+RUN curl -L -o /usr/local/bin/ttyd \
+        https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
+    && chmod +x /usr/local/bin/ttyd
+
+# ── 3. Non-root user ─────────────────────────────────────────────────────────
+# uid 1001 avoids conflicts with UDI (10001) and the standalone image (1000).
+# OpenShift injects an arbitrary UID from the project's range; g+rwX dirs below
+# ensure that UID can write regardless of which UID it lands on.
+RUN useradd -m -u 1001 nanobot
+
+# ── 4. Install nanobot-ai from PyPI ──────────────────────────────────────────
+ENV VIRTUAL_ENV=/opt/nanobot-env
+ENV PATH="/opt/nanobot-env/bin:$PATH"
+
+RUN uv venv --python /usr/bin/python3.12 "$VIRTUAL_ENV" \
+    && uv pip install --python "$VIRTUAL_ENV/bin/python" --no-cache nanobot-ai \
+    && chown -R 1001:0 "$VIRTUAL_ENV" \
+    && chmod -R g+rwX "$VIRTUAL_ENV"
+
+# ── 5. Data and workspace directories ────────────────────────────────────────
+RUN mkdir -p /home/nanobot/.nanobot /home/nanobot/workspace \
+    && chown -R 1001:0 /home/nanobot \
+    && chmod -R g+rwX /home/nanobot
+
+# ── 6. Entrypoint (selects ttyd command based on NANOBOT_TTYD_CMD) ───────────
+COPY entrypoint-ttyd.sh /usr/local/bin/entrypoint-ttyd.sh
+RUN chmod +x /usr/local/bin/entrypoint-ttyd.sh
+
+# ── 7. Environment ────────────────────────────────────────────────────────────
+ENV HOME=/home/nanobot
+ENV TERM=xterm-256color
+ENV PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1
+
+# Default ttyd command.  Override in the Deployment spec or at runtime:
+#   -e NANOBOT_TTYD_CMD=bash
+ENV NANOBOT_TTYD_CMD=agent
+
+# ── 8. Persistent volume mount points ────────────────────────────────────────
+# podman / docker:
+#   -v nanobot-data:/home/nanobot/.nanobot
+#   -v nanobot-workspace:/home/nanobot/workspace
+#
+# OpenShift PVC: see openshift/ttyd-pvc.yaml
+VOLUME ["/home/nanobot/.nanobot", "/home/nanobot/workspace"]
+
+USER 1001
+WORKDIR /home/nanobot/workspace
+
+# ── 9. Expose ttyd port ───────────────────────────────────────────────────────
+EXPOSE 7681
+
+# ── 10. Launch ttyd via entrypoint ───────────────────────────────────────────
+CMD ["/usr/local/bin/entrypoint-ttyd.sh"]

@@ -1,6 +1,19 @@
 https://github.com/HKUDS/nanobot
 
+>> Setup uv environment
 $ source .venv/bin/activate >>> to start nanobot environment
+$ uv tool install nanobot-ai  >>> "tool install" option allows running nanobot without using "uv run"
+
+>> Configuration check/set
+$ nanobot status
+$ nanobot onboard --wizard --config "/home/nanobot/.nanobot/config.json"
+
+$ nanobot agent
+  /model OpenAI >> to switch model
+
+$ nanobot webui -c "/home/nanobot/.nanobot/config.json"
+
+
 $ nanobot webui >>> do not enable websocket in WSL
 $ cat ~/.nanobot/config.json | grep websocket
 $ nanobot webui >>> access via webui

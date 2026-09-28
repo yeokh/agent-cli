@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s4
+  labels:
+    app: s4
+spec:
+  # Only 1 replica — backed by SQLite which does not support concurrent writers.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: s4
+  template:
+    metadata:
+      labels:
+        app: s4
+    spec:
+      containers:
+        - name: s4
+          image: quay.io/<your-org>/s4-server:latest
+          imagePullPolicy: Always
+          ports:
+            - name: web-ui
+              containerPort: 5000
+              protocol: TCP
+            - name: s3-api
+              containerPort: 7480
+              protocol: TCP
+          env:
+            # ── S3 API (internal RGW) ────────────────────────────────────────
+            - name: AWS_S3_ENDPOINT
+              value: "http://localhost:7480"
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+
+            # ── S3 credentials — sourced from Secret ─────────────────────────
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: s4-secret
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s4-secret
+                  key: AWS_SECRET_ACCESS_KEY
+
+            # ── Web UI authentication (optional) ─────────────────────────────
+            # Leave UI_USERNAME / UI_PASSWORD empty to disable login.
+            - name: UI_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: s4-secret
+                  key: UI_USERNAME
+                  optional: true
+            - name: UI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: s4-secret
+                  key: UI_PASSWORD
+                  optional: true
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: s4-secret
+                  key: JWT_SECRET
+                  optional: true
+
+            # ── Server settings ──────────────────────────────────────────────
+            - name: PORT
+              value: "5000"
+            - name: IP
+              value: "0.0.0.0"
+            - name: JWT_EXPIRATION_HOURS
+              value: "8"
+            # Set to "false" when the Route terminates TLS externally:
+            - name: COOKIE_REQUIRE_HTTPS
+              value: "true"
+
+            # ── Storage settings ─────────────────────────────────────────────
+            # LOCAL_STORAGE_PATHS: comma-separated paths to expose in the file
+            # browser (e.g. "/opt/app-root/src/data"). Empty = disabled.
+            - name: LOCAL_STORAGE_PATHS
+              value: ""
+            - name: MAX_FILE_SIZE_GB
+              value: "20"
+            - name: MAX_CONCURRENT_TRANSFERS
+              value: "2"
+
+            - name: NODE_ENV
+              value: "production"
+
+          volumeMounts:
+            - name: s4-data
+              mountPath: /var/lib/ceph/radosgw
+            # Optional: mount a separate PVC for the local file browser
+            # - name: s4-local-storage
+            #   mountPath: /opt/app-root/src/data
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+
+          readinessProbe:
+            httpGet:
+              path: /api
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /api
+              port: 5000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+      volumes:
+        - name: s4-data
+          persistentVolumeClaim:
+            claimName: s4-data
+        # Optional local storage PVC (enable when LOCAL_STORAGE_PATHS is set):
+        # - name: s4-local-storage
+        #   persistentVolumeClaim:
+        #     claimName: s4-local-storage

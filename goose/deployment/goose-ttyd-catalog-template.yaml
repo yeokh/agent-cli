@@ -1,0 +1,90 @@
+# Add to Software Catalog cluster-wide or by namespace
+# oc apply -f goose-ttyd-template.yaml -n openshift
+# oc apply -f goose-ttyd-template.yaml
+# 
+# Default start in bash shell to configure goose
+# ["ttyd", "--port", "7681", "--writable", "goose", "session"]
+#
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: goose-ttyd-template
+  annotations:
+    openshift.io/display-name: "Goose TTYD (Customizable Shell)"
+    description: "Deploys a web-based terminal with Goose agent. Run goose configure to start."
+    openshift.io/provider-display-name: "RH Workshop"
+    iconClass: "icon-terminal"
+    tags: "terminal,web,ttyd"
+objects:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: "${APP_NAME}"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: "${APP_NAME}"
+      template:
+        metadata:
+          labels:
+            app: "${APP_NAME}"
+        spec:
+          containers:
+            - name: goose-ttyd
+              image: "${IMAGE_NAME}"
+              # The ${{ }} syntax parses the JSON string parameter into a YAML array
+              command: ${{STARTUP_COMMAND}}
+              ports:
+                - containerPort: ${{PORT}}
+                  protocol: TCP
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: "${APP_NAME}"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      ports:
+        - name: web
+          port: 80
+          targetPort: ${{PORT}}
+          protocol: TCP
+      selector:
+        app: "${APP_NAME}"
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: "${APP_NAME}"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      to:
+        kind: Service
+        name: "${APP_NAME}"
+      port:
+        targetPort: ${{PORT}}
+parameters:
+  - name: APP_NAME
+    displayName: Application Name
+    description: The name assigned to all application objects.
+    value: goose-ttyd
+    required: true
+  - name: IMAGE_NAME
+    displayName: Container Image
+    description: The Quay.io image repository to deploy.
+    value: quay.io/kenghua_yeo/goose-ttyd:latest
+    required: true
+  - name: PORT
+    displayName: Container Port
+    description: The internal port the container listens on.
+    value: "7681"
+    required: true
+  - name: STARTUP_COMMAND
+    displayName: Startup Command Array
+    description: The command array to execute. Must be formatted as a valid JSON array.
+    value: '["ttyd", "--port", "7681", "--writable", "bash"]'
+    required: true
+

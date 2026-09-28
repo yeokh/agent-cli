@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gogs
+  labels:
+    app: gogs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gogs
+  template:
+    metadata:
+      labels:
+        app: gogs
+    spec:
+      containers:
+        - name: gogs
+          image: quay.io/<your-org>/gogs-server:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+            - name: ssh
+              containerPort: 2222
+              protocol: TCP
+          env:
+            # ── Server settings ──────────────────────────────────────────────
+            - name: GOGS_HTTP_PORT
+              value: "3000"
+            - name: GOGS_SSH_PORT
+              value: "2222"
+            # Set to the Route host once created:
+            #   oc get route gogs-http -o jsonpath='{.spec.host}'
+            - name: GOGS_DOMAIN
+              value: "localhost"
+
+            # ── Admin credentials — sourced from Secret ──────────────────────
+            # When GOGS_ADMIN_PASSWORD is set the server auto-provisions the
+            # admin account on first start (no web wizard required).
+            # Leave empty to use the interactive web installer instead.
+            - name: GOGS_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: gogs-secret
+                  key: GOGS_ADMIN_USER
+                  optional: true
+            - name: GOGS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gogs-secret
+                  key: GOGS_ADMIN_PASSWORD
+                  optional: true
+            - name: GOGS_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: gogs-secret
+                  key: GOGS_ADMIN_EMAIL
+                  optional: true
+
+          volumeMounts:
+            - name: gogs-data
+              mountPath: /data
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+
+      volumes:
+        - name: gogs-data
+          persistentVolumeClaim:
+            claimName: gogs-data

@@ -1,0 +1,32 @@
+# ── Route: Gogs web UI / HTTP API ─────────────────────────────────────────────
+# Use this host as GOGS_DOMAIN in the Deployment env (or Secret).
+# Example: git clone https://<route-host>/<user>/<repo>.git
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: gogs-http
+  labels:
+    app: gogs
+spec:
+  to:
+    kind: Service
+    name: gogs
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+# ── Route: Gogs built-in SSH server ──────────────────────────────────────────
+# OpenShift Routes only support HTTP/HTTPS; TCP (SSH) passthrough requires
+# an OpenShift NodePort or LoadBalancer Service instead of a Route.
+# The snippet below is provided as a reference for edge-TLS SSH tunnelling.
+# For plain TCP SSH access expose port 2222 via a NodePort Service:
+#
+#   oc patch svc gogs --type='json' \
+#     -p='[{"op":"add","path":"/spec/ports/-",
+#           "value":{"name":"ssh-nodeport","port":2222,"nodePort":30022,
+#                    "targetPort":2222,"protocol":"TCP"}}]'
+#   oc patch svc gogs -p '{"spec":{"type":"NodePort"}}'
+#
+# Then use:  git clone ssh://git@<node-ip>:30022/<user>/<repo>.git

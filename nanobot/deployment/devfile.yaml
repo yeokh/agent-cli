@@ -25,10 +25,11 @@ metadata:
 #
 #   2. Replace the image reference below with your quay.io repo.
 #
-#   3. Supply API keys and web token via an OpenShift Secret:
+#   3. Supply API keys via an OpenShift Secret:
 #        oc create secret generic nanobot-api-keys \
 #          --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
-#          --from-literal=NANOBOT_WEB_TOKEN=<your-token>
+#          --from-literal=NANOBOT_AGENTS__DEFAULTS__PROVIDER=anthropic \
+#          --from-literal=NANOBOT_AGENTS__DEFAULTS__MODEL=anthropic/claude-opus-4-5
 #      Then uncomment the secretKeyRef env blocks in the container below.
 #
 #   4. Open the workspace via the Dev Spaces dashboard or:
@@ -62,27 +63,38 @@ components:
           value: "1"
         - name: PYTHONFAULTHANDLER
           value: "1"
-        # ── API keys and web token ────────────────────────────────────────────
+        # Bind gateway to all interfaces so DevSpaces routes can reach it.
+        - name: NANOBOT_GATEWAY__HOST
+          value: "0.0.0.0"
+        # ── Provider API keys ─────────────────────────────────────────────────
         # Option A: hard-code for development (not recommended for production)
         # - name: ANTHROPIC_API_KEY
         #   value: sk-ant-...
-        # - name: NANOBOT_WEB_TOKEN
-        #   value: <your-token>
+        # - name: NANOBOT_AGENTS__DEFAULTS__PROVIDER
+        #   value: anthropic
+        # - name: NANOBOT_AGENTS__DEFAULTS__MODEL
+        #   value: anthropic/claude-opus-4-5
         #
         # Option B (recommended): source from an OpenShift Secret
         #   oc create secret generic nanobot-api-keys \
         #     --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
-        #     --from-literal=NANOBOT_WEB_TOKEN=<your-token>
+        #     --from-literal=NANOBOT_AGENTS__DEFAULTS__PROVIDER=anthropic \
+        #     --from-literal=NANOBOT_AGENTS__DEFAULTS__MODEL=anthropic/claude-opus-4-5
         # - name: ANTHROPIC_API_KEY
         #   valueFrom:
         #     secretKeyRef:
         #       name: nanobot-api-keys
         #       key: ANTHROPIC_API_KEY
-        # - name: NANOBOT_WEB_TOKEN
+        # - name: NANOBOT_AGENTS__DEFAULTS__PROVIDER
         #   valueFrom:
         #     secretKeyRef:
         #       name: nanobot-api-keys
-        #       key: NANOBOT_WEB_TOKEN
+        #       key: NANOBOT_AGENTS__DEFAULTS__PROVIDER
+        # - name: NANOBOT_AGENTS__DEFAULTS__MODEL
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: nanobot-api-keys
+        #       key: NANOBOT_AGENTS__DEFAULTS__MODEL
 
   # Persistent volume: survives workspace restarts and image rebuilds.
   # Stores nanobot config, sessions, channel data, and runtime state.
@@ -92,20 +104,30 @@ components:
 
 commands:
   # ── Start nanobot ──────────────────────────────────────────────────────────
-  - id: nanobot-start
+  - id: nanobot-webui
     exec:
-      label: "1. Start nanobot (gateway + WebUI)"
+      label: "1. Start nanobot WebUI (gateway + browser workbench)"
       component: nanobot
       workingDir: ${PROJECT_SOURCE}
-      commandLine: "nanobot start --host 0.0.0.0"
+      commandLine: "nanobot webui --no-open --yes"
       group:
         kind: run
         isDefault: true
 
+  - id: nanobot-agent
+    exec:
+      label: "2. Start nanobot agent (interactive TUI)"
+      component: nanobot
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: "nanobot agent"
+      group:
+        kind: run
+        isDefault: false
+
   # ── Status check ──────────────────────────────────────────────────────────
   - id: nanobot-status
     exec:
-      label: "2. nanobot status"
+      label: "3. nanobot status"
       component: nanobot
       workingDir: ${PROJECT_SOURCE}
       commandLine: "nanobot status"
@@ -116,10 +138,10 @@ commands:
   # ── List channels ──────────────────────────────────────────────────────────
   - id: nanobot-channels
     exec:
-      label: "3. List nanobot channels"
+      label: "4. List nanobot channels"
       component: nanobot
       workingDir: ${PROJECT_SOURCE}
-      commandLine: "nanobot channel list"
+      commandLine: "nanobot channels list"
       group:
         kind: run
         isDefault: false

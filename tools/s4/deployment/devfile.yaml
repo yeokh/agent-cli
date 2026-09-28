@@ -1,0 +1,80 @@
+# S4 DevSpaces workspace devfile
+#
+# Deploys S4 as a component inside an OpenShift DevSpaces workspace.
+# The web UI is accessible via the "s4-ui" endpoint and the S3 API
+# is available at http://localhost:7480 from within the workspace.
+#
+# Usage:
+#   oc devspaces workspace create --devfile deployment/devfile.yaml
+#   OR register this devfile URL in the DevSpaces dashboard.
+#
+schemaVersion: 2.2.0
+metadata:
+  name: s4-storage-server
+  displayName: S4 Super Simple Storage Service
+  description: >
+    Lightweight S3-compatible object storage with web management UI.
+    Backed by Ceph RGW + POSIX filesystem — no Ceph cluster required.
+  tags:
+    - s3
+    - storage
+    - ceph
+    - minio
+    - devtools
+
+components:
+  - name: s4
+    container:
+      image: quay.io/<your-org>/s4-server:latest
+      memoryLimit: 2Gi
+      memoryRequest: 512Mi
+      cpuLimit: "2"
+      cpuRequest: 250m
+
+      env:
+        # S3 credentials
+        - name: AWS_ACCESS_KEY_ID
+          value: "s4admin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "s4secret"
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        - name: AWS_S3_ENDPOINT
+          value: "http://localhost:7480"
+        # UI authentication (empty = no login required in dev)
+        - name: UI_USERNAME
+          value: ""
+        - name: UI_PASSWORD
+          value: ""
+        # Disable HTTPS cookie requirement for dev workspaces
+        - name: COOKIE_REQUIRE_HTTPS
+          value: "false"
+        - name: NODE_ENV
+          value: "production"
+
+      endpoints:
+        # Web management UI
+        - name: s4-ui
+          targetPort: 5000
+          exposure: public
+          protocol: https
+          attributes:
+            type: main
+            discoverable: true
+            urlRewriteSupported: false
+        # S3 API endpoint — use with AWS CLI / boto3 / etc.
+        - name: s4-s3
+          targetPort: 7480
+          exposure: public
+          protocol: https
+          attributes:
+            discoverable: true
+            urlRewriteSupported: false
+
+      volumeMounts:
+        - name: s4-data
+          path: /var/lib/ceph/radosgw
+
+  - name: s4-data
+    volume:
+      size: 10Gi

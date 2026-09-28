@@ -1,0 +1,33 @@
+# ── PVC: Ceph RGW data ────────────────────────────────────────────────────────
+# Stores all object data (bucket contents, SQLite metadata DB, user accounts).
+# Size based on total expected storage of all buckets.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: s4-data
+  labels:
+    app: s4
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# ── PVC: Local filesystem storage (optional) ──────────────────────────────────
+# Uncomment and mount this PVC (see deployment.yaml) when you want the web UI
+# to browse and transfer files from a mounted filesystem / PVC.
+# Set LOCAL_STORAGE_PATHS=/opt/app-root/src/data in the Deployment env.
+#
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: s4-local-storage
+#   labels:
+#     app: s4
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 50Gi

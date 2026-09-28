@@ -1,0 +1,68 @@
+# Gogs DevSpaces workspace devfile
+#
+# Deploys Gogs as a component inside an OpenShift DevSpaces workspace.
+# The Git server is available at http://localhost:3000 from within the workspace,
+# and SSH is reachable on port 2222.
+#
+# Usage:
+#   oc devspaces workspace create --devfile deployment/devfile.yaml
+#   OR register this devfile URL in the DevSpaces dashboard.
+#
+schemaVersion: 2.2.0
+metadata:
+  name: gogs-git-server
+  displayName: Gogs Git Server
+  description: >
+    Self-hosted Git server with web UI, HTTP and built-in SSH access.
+    Backed by SQLite — no external database required.
+  tags:
+    - git
+    - gogs
+    - scm
+    - devtools
+
+components:
+  - name: gogs
+    container:
+      image: quay.io/<your-org>/gogs-server:latest
+      memoryLimit: 1Gi
+      memoryRequest: 256Mi
+      cpuLimit: "1"
+      cpuRequest: 100m
+
+      env:
+        # Set GOGS_ADMIN_PASSWORD to enable auto-provisioning on first start.
+        # Leave empty to use the interactive web installer on first visit.
+        - name: GOGS_ADMIN_USER
+          value: "gogs"
+        - name: GOGS_ADMIN_PASSWORD
+          value: ""
+        - name: GOGS_ADMIN_EMAIL
+          value: "gogs@localhost"
+
+      endpoints:
+        # Gogs web UI — browse repos, manage users, configure settings
+        - name: gogs-http
+          targetPort: 3000
+          exposure: public
+          protocol: https
+          attributes:
+            type: main
+            discoverable: true
+            urlRewriteSupported: false
+        # Built-in SSH server — git clone / push over SSH
+        - name: gogs-ssh
+          targetPort: 2222
+          exposure: public
+          protocol: https
+          attributes:
+            discoverable: false
+            urlRewriteSupported: false
+
+      volumeMounts:
+        - name: gogs-data
+          path: /data
+
+  - name: gogs-data
+    volume:
+      size: 20Gi

@@ -1,0 +1,41 @@
+# ── Route: S4 Web Management UI ───────────────────────────────────────────────
+# Browser access to the React storage management interface.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: s4-ui
+  labels:
+    app: s4
+spec:
+  to:
+    kind: Service
+    name: s4
+  port:
+    targetPort: web-ui
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+# ── Route: S4 S3 API ──────────────────────────────────────────────────────────
+# Exposes the Ceph RGW S3-compatible endpoint for external clients.
+# WARNING: This route makes the S3 API publicly reachable.
+#          Ensure credentials are set and consider network policies.
+#
+# When this route is used set AWS_ENDPOINT_URL to the route host, e.g.:
+#   export AWS_ENDPOINT_URL=https://<route-host>
+#   aws s3 ls
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: s4-s3
+  labels:
+    app: s4
+spec:
+  to:
+    kind: Service
+    name: s4
+  port:
+    targetPort: s3-api
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

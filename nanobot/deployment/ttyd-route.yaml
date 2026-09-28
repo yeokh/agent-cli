@@ -1,0 +1,15 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: nanobot-ttyd
+  labels:
+    app: nanobot-ttyd
+spec:
+  to:
+    kind: Service
+    name: nanobot-ttyd
+  port:
+    targetPort: ttyd
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

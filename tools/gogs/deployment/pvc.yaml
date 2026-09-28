@@ -1,0 +1,18 @@
+# Persistent volume for all Gogs data:
+#   /data/gogs/         — app config, SQLite DB, sessions, logs
+#   /data/git/          — bare Git repositories
+#   /data/ssh/          — host SSH keys for the built-in SSH server
+#
+# Resize storage based on the number and size of repositories hosted.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gogs-data
+  labels:
+    app: gogs
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi

@@ -1,0 +1,14 @@
+# Persistent volume for devpi server data (indexes, package cache, metadata).
+# Resize storage as needed based on the number of packages hosted.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: devpi-data
+  labels:
+    app: devpi
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

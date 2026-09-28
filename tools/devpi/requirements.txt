@@ -1,0 +1,27 @@
+# requirements.txt — packages to pre-load into the devpi server at image build time.
+#
+# These packages (and all their dependencies) are downloaded from PyPI during
+# `podman build` and baked into the image under /packages/.  On first startup
+# they are automatically uploaded into the devpi local index so the server is
+# immediately usable in a disconnected environment.
+#
+# ── Disconnected / air-gapped workflow ────────────────────────────────────────
+#
+#   If the build host also lacks internet access, pre-download packages on a
+#   connected machine and copy them in:
+#
+#     # 1. On a connected host:
+#     pip download -r requirements.txt -d ./packages/
+#
+#     # 2. Uncomment the "COPY packages/" line in the Containerfile, then build:
+#     podman build -t devpi-server:latest .
+#
+# ── Add your packages below ───────────────────────────────────────────────────
+
+# Example packages — replace or extend with your own:
+requests
+urllib3
+certifi
+setuptools
+wheel
+pip

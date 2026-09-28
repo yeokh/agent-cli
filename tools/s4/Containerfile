@@ -1,0 +1,203 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# S4 — Super Simple Storage Service on Red Hat UBI
+#
+# Single-container S3-compatible object storage (Ceph RGW + POSIX backend)
+# with a React/Node.js management UI.
+# OpenShift DevSpaces / restricted-v2 SCC compatible (runs as arbitrary UID).
+#
+# ── Build ─────────────────────────────────────────────────────────────────────
+#
+#   # Standard build (downloads s4 source from GitHub, ceph-radosgw from
+#   # the official Ceph Reef repo):
+#   podman build -t s4-server:latest .
+#
+#   # Pin a specific s4 release:
+#   podman build --build-arg S4_VERSION=0.3.2 -t s4-server:latest .
+#
+#   # Disconnected build — on a connected machine, pre-download the source:
+#   #   curl -fsSL https://github.com/rh-aiservices-bu/s4/archive/refs/tags/v0.3.2.tar.gz \
+#   #        -o s4-src.tar.gz
+#   # Then uncomment the COPY line in Stage 1 and comment out the curl block.
+#
+# ── Run ───────────────────────────────────────────────────────────────────────
+#
+#   # Standalone server (web UI port 5000, S3 API port 7480):
+#   podman run --rm -p 5000:5000 -p 7480:7480 \
+#     -v s4-data:/var/lib/ceph/radosgw \
+#     s4-server:latest
+#
+#   # With custom S3 credentials and UI authentication:
+#   podman run --rm -p 5000:5000 -p 7480:7480 \
+#     -e AWS_ACCESS_KEY_ID=mykey \
+#     -e AWS_SECRET_ACCESS_KEY=mysecret \
+#     -e UI_USERNAME=admin \
+#     -e UI_PASSWORD=changeme \
+#     -v s4-data:/var/lib/ceph/radosgw \
+#     s4-server:latest
+#
+# ── S3 access ─────────────────────────────────────────────────────────────────
+#
+#   export AWS_ACCESS_KEY_ID=s4admin
+#   export AWS_SECRET_ACCESS_KEY=s4secret
+#   export AWS_ENDPOINT_URL=http://localhost:7480
+#   aws s3 mb s3://my-bucket
+#   aws s3 cp myfile.txt s3://my-bucket/
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: Build TypeScript frontend + backend ──────────────────────────────
+# ubi9/nodejs-20 is already Red Hat UBI — no change needed from upstream.
+FROM registry.access.redhat.com/ubi9/nodejs-20 AS node-builder
+
+USER 0
+WORKDIR /tmp/s4
+
+ARG S4_VERSION=0.3.2
+
+# Download s4 source from GitHub Releases
+RUN curl -fsSL \
+        "https://github.com/rh-aiservices-bu/s4/archive/refs/tags/v${S4_VERSION}.tar.gz" \
+        -o /tmp/s4-src.tar.gz \
+    && tar -xzf /tmp/s4-src.tar.gz --strip-components=1 \
+    && rm /tmp/s4-src.tar.gz
+
+# Option B (disconnected builds): copy a pre-downloaded source tarball:
+# COPY s4-src.tar.gz /tmp/s4-src.tar.gz
+# RUN tar -xzf /tmp/s4-src.tar.gz --strip-components=1 && rm /tmp/s4-src.tar.gz
+
+# Install all dependencies and build frontend + backend
+RUN npm install \
+    && npm run build
+
+# ── Stage 2: Runtime — UBI9 + Ceph RGW (Reef) + Node.js ─────────────────────
+#
+# ubi9/nodejs-20 provides Node.js 20 on a UBI9 base.
+# Ceph Reef (18.x) packages are sourced from the official Ceph repo for el9.
+#
+# NOTE: This build requires internet access to download the Ceph RPM repo.
+#       For disconnected builds, mirror the Ceph repo internally and point
+#       the URL below to your internal mirror.
+#
+# NOTE on the POSIX filter: Ceph 18 (Reef) ships the RGW POSIX filter
+#       (rgw filter = posix) in the standard ceph-radosgw package. This is
+#       the same feature used by the upstream radosgw-posix image.
+#       If the installed radosgw version predates this feature, the server
+#       will emit "unrecognised filter" errors — update to Ceph 18.2.x+.
+FROM registry.access.redhat.com/ubi9/nodejs-20 AS runtime
+
+USER root
+
+ARG S4_VERSION=0.3.2
+
+# ── 1. System dependencies + Ceph Reef radosgw ───────────────────────────────
+RUN rpm --import "https://download.ceph.com/keys/release.asc" \
+    && curl -fsSL \
+        "https://download.ceph.com/rpm-reef/el9/noarch/ceph-release-1-1.el9.noarch.rpm" \
+        -o /tmp/ceph-release.rpm \
+    && dnf install -y /tmp/ceph-release.rpm \
+    && rm /tmp/ceph-release.rpm \
+    && dnf install -y --setopt=install_weak_deps=False \
+        ceph-radosgw \
+        python3-pip \
+        curl \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+# ── 2. Process supervisor (supervisord) ──────────────────────────────────────
+#    supervisord manages both the radosgw daemon and the Node.js server.
+RUN pip3 install --no-cache-dir supervisor \
+    && rm -rf /root/.cache/pip
+
+# ── 3. s5cmd — optional S3 CLI for debugging / administration ────────────────
+RUN curl -fsSL \
+        "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz" \
+        -o /tmp/s5cmd.tar.gz \
+    && tar -xzf /tmp/s5cmd.tar.gz -C /usr/local/bin/ s5cmd \
+    && rm /tmp/s5cmd.tar.gz
+
+# ── 4. Application directories with OpenShift-compatible permissions ──────────
+#    UID 1001 / GID 0 + g+rwX matches the restricted-v2 SCC pattern.
+RUN mkdir -p \
+        /opt/app-root/bin/s4/backend \
+        /opt/app-root/bin/s4/frontend \
+        /opt/app-root/src/data \
+        /var/lib/ceph/radosgw/db \
+        /var/lib/ceph/radosgw/db/rgw_posix_lmdbs \
+        /var/lib/ceph/radosgw/buckets \
+        /var/lib/ceph/radosgw/tmp \
+    && chown -R 1001:0 /opt/app-root /var/lib/ceph \
+    && chmod -R g+rwX  /opt/app-root /var/lib/ceph \
+    && chown -R 1001:0 /var/log /var/run \
+    && chmod -R g+rwX  /var/log /var/run
+
+# ── 5. Copy configuration files ───────────────────────────────────────────────
+COPY ceph.conf        /etc/ceph/ceph.conf
+COPY supervisord.conf /etc/supervisord.conf
+COPY entrypoint.sh    /usr/local/bin/entrypoint.sh
+
+RUN chown 1001:0 /etc/ceph/ceph.conf /etc/supervisord.conf \
+                 /usr/local/bin/entrypoint.sh \
+    && chmod g+rw /etc/ceph/ceph.conf /etc/supervisord.conf \
+    && chmod +x   /usr/local/bin/entrypoint.sh
+
+# ── 6. Copy built frontend + backend from builder ─────────────────────────────
+COPY --from=node-builder --chown=1001:0 \
+    /tmp/s4/backend/package*.json \
+    /opt/app-root/bin/s4/backend/
+
+COPY --from=node-builder --chown=1001:0 \
+    /tmp/s4/backend/dist \
+    /opt/app-root/bin/s4/backend/dist
+
+COPY --from=node-builder --chown=1001:0 \
+    /tmp/s4/frontend/dist \
+    /opt/app-root/bin/s4/frontend/dist
+
+# ── 7. Install production Node.js dependencies ────────────────────────────────
+WORKDIR /opt/app-root/bin/s4/backend
+RUN npm install --omit=dev \
+    && npm cache clean --force \
+    && chown -R 1001:0 /opt/app-root/bin/s4/backend/node_modules \
+    && chmod -R g+rwX  /opt/app-root/bin/s4/backend/node_modules
+
+# ── 8. Environment defaults ───────────────────────────────────────────────────
+# S3 backend (internal RGW)
+ENV AWS_S3_ENDPOINT=http://localhost:7480
+ENV AWS_ACCESS_KEY_ID=s4admin
+ENV AWS_SECRET_ACCESS_KEY=s4secret
+ENV AWS_DEFAULT_REGION=us-east-1
+
+# Node.js web server
+ENV PORT=5000
+ENV IP=0.0.0.0
+ENV NODE_ENV=production
+
+# UI authentication (empty = no auth required; set both to enable login)
+ENV UI_USERNAME=""
+ENV UI_PASSWORD=""
+ENV JWT_SECRET=""
+ENV JWT_EXPIRATION_HOURS=8
+ENV COOKIE_REQUIRE_HTTPS=true
+
+# Storage settings
+ENV LOCAL_STORAGE_PATHS=""
+ENV MAX_FILE_SIZE_GB=20
+ENV MAX_CONCURRENT_TRANSFERS=2
+
+# ── 9. Volumes ────────────────────────────────────────────────────────────────
+#   /var/lib/ceph/radosgw   — Ceph RGW metadata, SQLite DB, bucket data
+#   /opt/app-root/src/data  — local filesystem storage (optional)
+VOLUME ["/var/lib/ceph/radosgw", "/opt/app-root/src/data"]
+
+USER 1001
+WORKDIR /opt/app-root/src
+
+# ── 10. Ports ─────────────────────────────────────────────────────────────────
+#   5000 — Web management UI
+#   7480 — S3-compatible API (Ceph RGW)
+EXPOSE 5000 7480
+
+HEALTHCHECK CMD (curl --noproxy localhost -o /dev/null -sS http://localhost:5000/api) || exit 1
+
+# ── 11. Start ─────────────────────────────────────────────────────────────────
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

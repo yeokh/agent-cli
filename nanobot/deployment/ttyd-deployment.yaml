@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nanobot-ttyd
+  labels:
+    app: nanobot-ttyd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nanobot-ttyd
+  template:
+    metadata:
+      labels:
+        app: nanobot-ttyd
+    spec:
+      containers:
+        - name: nanobot-ttyd
+          image: quay.io/<your-org>/nanobot-ttyd:v1
+          imagePullPolicy: Always
+          ports:
+            - name: ttyd
+              containerPort: 7681
+              protocol: TCP
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: PYTHONFAULTHANDLER
+              value: "1"
+            # ttyd command: agent (default) | webui | bash
+            # Override here or via the Secret key NANOBOT_TTYD_CMD.
+            - name: NANOBOT_TTYD_CMD
+              value: "agent"
+            # Provider and model selection sourced from Secret.
+            # Create the secret first (choose one provider):
+            #   oc create secret generic nanobot-ttyd-api-keys \
+            #     --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
+            #     --from-literal=NANOBOT_AGENTS__DEFAULTS__MODEL=anthropic/claude-opus-4-5 \
+            #     --from-literal=NANOBOT_AGENTS__DEFAULTS__PROVIDER=anthropic
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nanobot-ttyd-api-keys
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nanobot-ttyd-api-keys
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nanobot-ttyd-api-keys
+                  key: GEMINI_API_KEY
+                  optional: true
+            - name: NANOBOT_AGENTS__DEFAULTS__PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: nanobot-ttyd-api-keys
+                  key: NANOBOT_AGENTS__DEFAULTS__PROVIDER
+                  optional: true
+            - name: NANOBOT_AGENTS__DEFAULTS__MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: nanobot-ttyd-api-keys
+                  key: NANOBOT_AGENTS__DEFAULTS__MODEL
+                  optional: true
+          volumeMounts:
+            - name: nanobot-data
+              mountPath: /home/nanobot/.nanobot
+            - name: nanobot-workspace
+              mountPath: /home/nanobot/workspace
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            tcpSocket:
+              port: 7681
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 7681
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: nanobot-data
+          persistentVolumeClaim:
+            claimName: nanobot-ttyd-data
+        - name: nanobot-workspace
+          persistentVolumeClaim:
+            claimName: nanobot-ttyd-workspace

@@ -1,0 +1,127 @@
+# Add to Software Catalog cluster-wide or by namespace
+# oc apply -f adk-agent-template.yaml -n openshift
+# oc apply -f adk-agent-template.yaml
+#
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: adk-agent-template
+  annotations:
+    openshift.io/display-name: "ADK Agent (Web UI)"
+    description: "Deploys the Google ADK file-processing agent with a Flask web UI."
+    openshift.io/provider-display-name: "RH Workshop"
+    iconClass: "icon-python"
+    tags: "python,adk,agent,web"
+objects:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: "${APP_NAME}"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: "${APP_NAME}"
+      template:
+        metadata:
+          labels:
+            app: "${APP_NAME}"
+        spec:
+          containers:
+            - name: adk-agent
+              image: "${IMAGE_NAME}"
+              ports:
+                - containerPort: ${{PORT}}
+                  protocol: TCP
+              env:
+                - name: RUN_MODE
+                  value: "${RUN_MODE}"
+                - name: API_PROVIDER
+                  value: "${API_PROVIDER}"
+                - name: MODEL
+                  value: "${MODEL}"
+                - name: MAX_TURNS
+                  value: "${MAX_TURNS}"
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 512Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              livenessProbe:
+                httpGet:
+                  path: /
+                  port: ${{PORT}}
+                initialDelaySeconds: 10
+                periodSeconds: 30
+              readinessProbe:
+                httpGet:
+                  path: /
+                  port: ${{PORT}}
+                initialDelaySeconds: 5
+                periodSeconds: 10
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: "${APP_NAME}"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      ports:
+        - name: web
+          port: 80
+          targetPort: ${{PORT}}
+          protocol: TCP
+      selector:
+        app: "${APP_NAME}"
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: "${APP_NAME}"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      to:
+        kind: Service
+        name: "${APP_NAME}"
+      port:
+        targetPort: ${{PORT}}
+parameters:
+  - name: APP_NAME
+    displayName: Application Name
+    description: The name assigned to all application objects.
+    value: adk-agent
+    required: true
+  - name: IMAGE_NAME
+    displayName: Container Image
+    description: The Quay.io image repository to deploy.
+    value: quay.io/kenghua_yeo/adk-agent:latest
+    required: true
+  - name: PORT
+    displayName: Container Port
+    description: The internal port the container listens on.
+    value: "8080"
+    required: true
+  - name: RUN_MODE
+    displayName: Run Mode
+    description: "Agent run mode: 'web' for Flask UI, 'agent' for CLI."
+    value: "web"
+    required: true
+  - name: API_PROVIDER
+    displayName: API Provider
+    description: "LLM provider (e.g. anthropic, openai)."
+    value: "anthropic"
+    required: true
+  - name: MODEL
+    displayName: Model
+    description: Model name to use for the agent.
+    value: "claude-opus-4-5"
+    required: true
+  - name: MAX_TURNS
+    displayName: Max Turns
+    description: Maximum number of agent turns per job.
+    value: "50"
+    required: true

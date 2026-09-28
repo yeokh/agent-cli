@@ -1,0 +1,37 @@
+# ── Route: devpi PyPI server ───────────────────────────────────────────────────
+# pip clients use this URL as their --index-url
+# Example: pip install --index-url https://<route-host>/root/local/+simple/ requests
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: devpi-pypi
+  labels:
+    app: devpi
+spec:
+  to:
+    kind: Service
+    name: devpi
+  port:
+    targetPort: pypi
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+# ── Route: ttyd web terminal ──────────────────────────────────────────────────
+# Provides browser-based terminal access to manage the devpi server.
+# Only active when DEVPI_MODE=ttyd.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: devpi-terminal
+  labels:
+    app: devpi
+spec:
+  to:
+    kind: Service
+    name: devpi
+  port:
+    targetPort: ttyd
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

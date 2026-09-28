@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devpi
+  labels:
+    app: devpi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devpi
+  template:
+    metadata:
+      labels:
+        app: devpi
+    spec:
+      containers:
+        - name: devpi
+          image: quay.io/<your-org>/devpi-server:latest
+          imagePullPolicy: Always
+          ports:
+            - name: pypi
+              containerPort: 3141
+              protocol: TCP
+            - name: ttyd
+              containerPort: 7681
+              protocol: TCP
+          env:
+            # ── Runtime mode ────────────────────────────────────────────────
+            # server: devpi-server only  (only port 3141 is active)
+            # ttyd:   devpi + web terminal (both 3141 and 7681 are active)
+            - name: DEVPI_MODE
+              value: "ttyd"
+
+            # ── Index configuration ──────────────────────────────────────────
+            # DEVPI_BASES controls whether the server is fully air-gapped:
+            #   ""         — air-gapped staging index (no upstream; default)
+            #   "root/pypi" — also create a PyPI mirror as a fallback
+            - name: DEVPI_BASES
+              value: ""
+
+            # Uncomment to proxy through PyPI (requires network from the pod):
+            # - name: DEVPI_BASES
+            #   value: "root/pypi"
+            # - name: DEVPI_UPSTREAM_URL
+            #   value: "https://pypi.org/simple/"
+
+            # ── Admin credentials — sourced from Secret ──────────────────────
+            - name: DEVPI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: devpi-secret
+                  key: DEVPI_PASSWORD
+                  optional: true
+
+            # ── Standard Python env vars ─────────────────────────────────────
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+          volumeMounts:
+            - name: devpi-data
+              mountPath: /data/devpi-server
+            # Optional: mount a directory of pre-downloaded wheels
+            # - name: devpi-packages
+            #   mountPath: /packages
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+
+          # devpi-server is ready once it serves HTTP on port 3141
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3141
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3141
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            failureThreshold: 3
+
+      volumes:
+        - name: devpi-data
+          persistentVolumeClaim:
+            claimName: devpi-data
+        # Optional additional packages PVC:
+        # - name: devpi-packages
+        #   persistentVolumeClaim:
+        #     claimName: devpi-packages

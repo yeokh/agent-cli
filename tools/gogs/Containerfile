@@ -1,0 +1,131 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Gogs Self-hosted Git Server on Red Hat UBI
+#
+# A single-container Git hosting server backed by SQLite.
+# OpenShift DevSpaces / restricted-v2 SCC compatible (runs as arbitrary UID).
+#
+# ── Build ─────────────────────────────────────────────────────────────────────
+#
+#   # Standard build (downloads gogs binary from GitHub Releases):
+#   podman build -t gogs-server:latest .
+#
+#   # Pin a specific gogs version:
+#   podman build --build-arg GOGS_VERSION=0.14.3 -t gogs-server:latest .
+#
+#   # Build for a different architecture (arm64, 386):
+#   podman build --build-arg TARGETARCH=arm64 -t gogs-server:arm64 .
+#
+#   # Disconnected build — download the tarball on a connected machine first:
+#   #   curl -fsSL https://github.com/gogs/gogs/releases/download/v0.14.3/gogs_v0.14.3_linux_amd64.tar.gz \
+#   #        -o gogs.tar.gz
+#   # Then copy it into the build context, uncomment the COPY line below,
+#   # and comment out the curl RUN block.
+#
+# ── Run ───────────────────────────────────────────────────────────────────────
+#
+#   # Standalone Git server (web UI port 3000, built-in SSH port 2222):
+#   podman run --rm -p 3000:3000 -p 2222:2222 \
+#     -v gogs-data:/data \
+#     gogs-server:latest
+#
+#   # With custom domain and admin credentials:
+#   podman run --rm -p 3000:3000 -p 2222:2222 \
+#     -e GOGS_DOMAIN=git.example.com \
+#     -e GOGS_ADMIN_USER=admin \
+#     -e GOGS_ADMIN_PASSWORD=changeme \
+#     -e GOGS_ADMIN_EMAIL=admin@example.com \
+#     -v gogs-data:/data \
+#     gogs-server:latest
+#
+# ── Git remotes ───────────────────────────────────────────────────────────────
+#
+#   # HTTP clone:
+#   git clone http://localhost:3000/<user>/<repo>.git
+#
+#   # SSH clone (built-in SSH server, no system sshd required):
+#   git clone ssh://git@localhost:2222/<user>/<repo>.git
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+USER root
+
+ARG GOGS_VERSION=0.14.3
+ARG TARGETARCH=amd64
+
+# ── 1. System dependencies ────────────────────────────────────────────────────
+RUN microdnf install -y \
+        bash \
+        ca-certificates \
+        curl \
+        findutils \
+        git \
+        openssh-clients \
+        shadow-utils \
+        tar \
+        gzip \
+        tzdata \
+    && microdnf clean all
+
+# ── 2. Download and install gogs pre-built binary ─────────────────────────────
+#    gogs release tarballs are self-contained: binary + bundled web assets.
+RUN mkdir -p /app \
+    && curl -fsSL \
+        "https://github.com/gogs/gogs/releases/download/v${GOGS_VERSION}/gogs_v${GOGS_VERSION}_linux_${TARGETARCH}.tar.gz" \
+        -o /tmp/gogs.tar.gz \
+    && tar -xzf /tmp/gogs.tar.gz -C /app/ \
+    && rm /tmp/gogs.tar.gz
+
+# Option B (disconnected builds): copy a pre-downloaded tarball instead:
+# COPY gogs.tar.gz /tmp/gogs.tar.gz
+# RUN mkdir -p /app && tar -xzf /tmp/gogs.tar.gz -C /app/ && rm /tmp/gogs.tar.gz
+
+# ── 3. Non-root user — uid 1000 / gid 0 for OpenShift restricted-v2 SCC ───────
+#    g+rwX on all dirs allows OpenShift's arbitrary injected UID (which lands in
+#    group 0) to write at runtime regardless of actual UID value.
+#    /etc/passwd is made group-writable so the entrypoint can register the
+#    injected UID for Go's os/user lookups (standard OpenShift pattern).
+RUN useradd -m -u 1000 -g 0 -s /bin/bash git \
+    && mkdir -p /data/gogs/data /data/gogs/conf /data/gogs/log \
+                /data/git/repositories /data/ssh \
+    && chown -R 1000:0 /app/gogs /data /home/git \
+    && chmod -R g+rwX  /app/gogs /data /home/git \
+    && chmod g+rw /etc/passwd /etc/group
+
+# ── 4. Entrypoint ─────────────────────────────────────────────────────────────
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# ── 5. Environment defaults ───────────────────────────────────────────────────
+ENV HOME=/home/git
+ENV GOGS_CUSTOM=/data/gogs
+ENV TERM=xterm-256color
+
+# Server settings
+ENV GOGS_VERSION=${GOGS_VERSION}
+ENV GOGS_HTTP_PORT=3000
+ENV GOGS_SSH_PORT=2222
+ENV GOGS_DOMAIN=localhost
+
+# Admin credentials for first-run auto-provisioning (change via Secret)
+ENV GOGS_ADMIN_USER=gogs
+ENV GOGS_ADMIN_PASSWORD=""
+ENV GOGS_ADMIN_EMAIL=gogs@localhost
+
+# ── 6. Volumes ────────────────────────────────────────────────────────────────
+#   /data      — all persistent state: repositories, SQLite DB, config, logs
+VOLUME ["/data"]
+
+USER 1000
+WORKDIR /app/gogs
+
+# ── 7. Ports ──────────────────────────────────────────────────────────────────
+#   3000 — Gogs web UI / HTTP API
+#   2222 — Gogs built-in SSH server (no system sshd required)
+EXPOSE 3000 2222
+
+HEALTHCHECK CMD (curl --noproxy localhost -o /dev/null -sS http://localhost:3000/healthcheck) || exit 1
+
+# ── 8. Start ──────────────────────────────────────────────────────────────────
+CMD ["/usr/local/bin/entrypoint.sh"]
