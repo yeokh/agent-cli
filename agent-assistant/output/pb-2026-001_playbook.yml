@@ -1,0 +1,52 @@
+---
+- name: Configure firewall for PB-2026-001
+  hosts: web-prod-01
+  become: true
+  gather_facts: yes
+
+  vars:
+    firewall_zone: public
+    open_ports:
+      - { port: 8080, proto: tcp, description: "Java app HTTP" }
+      - { port: 8443, proto: tcp, description: "Java app HTTPS" }
+      - { port: 9090, proto: tcp, description: "WildFly admin (temporary)" }
+
+  tasks:
+    - name: Ensure firewalld package is installed
+      ansible.builtin.package:
+        name: firewalld
+        state: present
+
+    - name: Ensure firewalld is enabled and running
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Open required ports (permanent + immediate)
+      ansible.builtin.firewalld:
+        port: "{{ item.port }}/{{ item.proto }}"
+        zone: "{{ firewall_zone }}"
+        permanent: yes
+        immediate: yes
+        state: enabled
+      loop: "{{ open_ports }}"
+      loop_control:
+        label: "{{ item.port }}/{{ item.proto }} ({{ item.description }})"
+
+    - name: Verify ports are present in runtime configuration
+      ansible.builtin.shell: "firewall-cmd --zone={{ firewall_zone }} --list-ports"
+      register: fw_ports
+      changed_when: false
+
+    - name: Show firewall ports (debug)
+      ansible.builtin.debug:
+        var: fw_ports.stdout_lines
+
+# Notes:
+# - This playbook is idempotent: the ansible firewalld module will not add duplicate rules.
+# - It only adds the specified ports and does not remove or alter other existing rules (including SSH/port 22).
+# - Port 9090 is tagged as temporary in the description; remember to remove it when no longer required.
+#   To remove 9090 later, run:
+#     ansible -i your_inventory web-prod-01 -m ansible.builtin.firewalld -a "port=9090/tcp zone=public permanent=yes immediate=yes state=disabled" -b
+# or use the provided shell script to remove the port.

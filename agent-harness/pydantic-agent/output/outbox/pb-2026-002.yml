@@ -5,15 +5,14 @@
 # OS: Red Hat Enterprise Linux 8.9
 # Requested by: Marcus Webb on 2026-06-20
 # ============================================================
-
 # Expected inventory entries:
-# [appuser_sudo_hosts]
+# [create_application_service_account_and_configure_limited_sudo_access]
 # db-prod-01 ansible_host=192.168.20.10
 # db-prod-02 ansible_host=192.168.20.11
 # db-prod-03 ansible_host=192.168.20.12
 
 - name: Create application service account and configure limited sudo access
-  hosts: appuser_sudo_hosts
+  hosts: create_application_service_account_and_configure_limited_sudo_access
   become: true
   vars:
     ansible_connection: ssh
@@ -21,89 +20,119 @@
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 
   tasks:
-    - name: Create appgroup group
+    - name: Ensure group 'appgroup' exists with GID 1500
       ansible.builtin.group:
         name: appgroup
         gid: 1500
         state: present
 
-    - name: Create appuser system user
+    - name: Ensure user 'appuser' exists with UID 1500 and home /opt/appuser
       ansible.builtin.user:
         name: appuser
         uid: 1500
         group: appgroup
         home: /opt/appuser
+        create_home: yes
         shell: /bin/bash
-        password: '!'
+        password: '!'    # account with no password (disabled password login)
         state: present
-        create_home: true
 
-    - name: Enforce home directory permissions and ownership
+    - name: Ensure /opt/appuser directory exists with correct ownership and permissions
       ansible.builtin.file:
         path: /opt/appuser
+        state: directory
         owner: appuser
         group: appgroup
         mode: '0700'
-        state: directory
 
-    - name: Configure SSH authorized key for appuser
+    - name: Ensure .ssh directory exists with correct permissions
+      ansible.builtin.file:
+        path: /opt/appuser/.ssh
+        state: directory
+        owner: appuser
+        group: appgroup
+        mode: '0700'
+
+    - name: Authorize provided SSH public key for appuser
       ansible.posix.authorized_key:
         user: appuser
-        key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vX... appuser@controller"
         state: present
+        key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vX... appuser@controller"
 
-    - name: Validate appuser account and group configuration
-      ansible.builtin.command: getent passwd appuser
-      register: appuser_passwd_check
-      changed_when: false
+    - name: Ensure ownership and permissions of authorized_keys
+      ansible.builtin.file:
+        path: /opt/appuser/.ssh/authorized_keys
+        owner: appuser
+        group: appgroup
+        mode: '0600'
 
-    - name: Debug appuser passwd entry
-      ansible.builtin.debug:
-        var: appuser_passwd_check.stdout
-
-    - name: Validate appgroup group configuration
-      ansible.builtin.command: getent group appgroup
-      register: appgroup_check
-      changed_when: false
-
-    - name: Debug appgroup entry
-      ansible.builtin.debug:
-        var: appgroup_check.stdout
-
-    - name: Validate home directory permissions, owner, and group
-      ansible.builtin.command: ls -ld /opt/appuser
-      register: appuser_home_check
-      changed_when: false
-
-    - name: Debug home directory details
-      ansible.builtin.debug:
-        var: appuser_home_check.stdout
-
-    - name: Configure sudoers privileges for appuser
+    - name: Ensure sudoers entry allowing appuser to run start/stop without password
       community.general.sudoers:
-        name: appuser-sudo
+        name: appuser_limited_sudo
         user: appuser
+        host: ALL
+        runas: root
         commands:
           - /opt/app/bin/start.sh
           - /opt/app/bin/stop.sh
-        nopassword: true
+        nopasswd: true
         state: present
-        validation: required
+        validate: true
 
-    - name: Validate sudoers configuration file syntax
-      ansible.builtin.command: visudo -c -f /etc/sudoers.d/appuser-sudo
-      register: sudoers_check
+    - name: Validation - confirm appuser exists
+      ansible.builtin.command:
+        cmd: getent passwd appuser
+      register: passwd_entry
       changed_when: false
 
-    - name: Debug sudoers syntax validation result
+    - name: Show passwd entry for appuser
       ansible.builtin.debug:
-        var: sudoers_check.stdout
+        var: passwd_entry.stdout
 
-    - name: Verify appuser sudo permissions
-      ansible.builtin.command: sudo -U appuser -l
-      register: appuser_sudo_list
+    - name: Validation - confirm appgroup exists
+      ansible.builtin.command:
+        cmd: getent group appgroup
+      register: group_entry
       changed_when: false
 
-    - name: Debug appuser sudo permissions list
+    - name: Show group entry for appgroup
       ansible.builtin.debug:
-        var: appuser_sudo_list.stdout
+        var: group_entry.stdout
+
+    - name: Validation - stat /opt/appuser
+      ansible.builtin.stat:
+        path: /opt/appuser
+      register: homestat
+
+    - name: Show /opt/appuser stat
+      ansible.builtin.debug:
+        var: homestat.stat
+
+    - name: Validation - check authorized_keys contains the public key
+      ansible.builtin.command:
+        cmd: grep -F "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vX... appuser@controller" /opt/appuser/.ssh/authorized_keys || true
+      register: key_check
+      changed_when: false
+
+    - name: Show authorized_keys check
+      ansible.builtin.debug:
+        var: key_check.stdout
+
+    - name: Validation - check sudoers file exists for appuser
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/appuser_limited_sudo
+      register: sudoers_stat
+
+    - name: Show sudoers file stat
+      ansible.builtin.debug:
+        var: sudoers_stat.stat
+
+    - name: Validation - show sudoers content for appuser
+      ansible.builtin.command:
+        cmd: sed -n '1,200p' /etc/sudoers.d/appuser_limited_sudo || true
+      register: sudoers_content
+      changed_when: false
+
+    - name: Show sudoers content
+      ansible.builtin.debug:
+        var: sudoers_content.stdout

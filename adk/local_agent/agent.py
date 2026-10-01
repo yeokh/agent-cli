@@ -6,13 +6,16 @@ import urllib.request                           # Import the built-in library fo
 ### Model Provider ###
 # Ensure your API key and base URL are loaded from your environment
 local_api_key = os.environ.get("LOCAL_API_KEY")
-local_base_url = os.environ.get("LOCAL_BASE_URL")
-local_model_name = os.environ.get("LOCAL_MODEL_NAME")
+local_base_url = os.environ.get("LOCAL_BASE_URL", "https://maas-rhdp.apps.maas.redhatworkshops.io")
+local_model_name = os.environ.get("LOCAL_MODEL_NAME", "gpt-oss-20b")
 
 # Define ANSI escape codes for terminal coloring
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RESET = "\033[0m"
+
+if not local_api_key:
+  print(f"{YELLOW}[WARNING]{RESET} LOCAL_API_KEY is not set!")
 
 ### ----------------------------------- ###
 ### Callback hooks for agent operations ###

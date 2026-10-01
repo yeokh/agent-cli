@@ -6,12 +6,12 @@ $ uv tool install nanobot-ai  >>> "tool install" option allows running nanobot w
 
 >> Configuration check/set
 $ nanobot status
-$ nanobot onboard --wizard --config "/home/nanobot/.nanobot/config.json"
+$ nanobot onboard --wizard --config "/root/.nanobot/config.json"
 
 $ nanobot agent
   /model OpenAI >> to switch model
 
-$ nanobot webui -c "/home/nanobot/.nanobot/config.json"
+$ nanobot webui -c "/root/.nanobot/config.json"
 
 
 $ nanobot webui >>> do not enable websocket in WSL
