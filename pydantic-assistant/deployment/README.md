@@ -20,6 +20,8 @@ deployment/
 ├── oauth-route.yaml                        OAuth Route (reencrypt TLS)
 ├── pydantic-assistant-template.yaml        Catalog template — basic variant
 ├── pydantic-assistant-oauth-template.yaml   Catalog template — OAuth variant
+├── gateway-*.yaml (6 files)                 Shared multi-instance gateway (see §6, deploy once)
+├── pydantic-assistant-name-template.yaml    Catalog template — named instance behind the gateway
 └── README.md                               This file
 ```
 
@@ -183,6 +185,65 @@ step from section 4:
 oc adm policy add-cluster-role-to-user system:auth-delegator \
   -z <APP_NAME> -n <project>
 ```
+
+---
+
+## 6. Multiple named instances behind one shared URL
+
+Want several assistant instances — e.g. one per workshop attendee — all reachable
+under **one** shared Route/hostname, as `https://<gateway-host>/<assistant-name>/`,
+each with its own isolated agent/input/output storage? Use the gateway + named-instance
+template instead of sections 3–5 above.
+
+**How it works:** one shared gateway (`oauth-proxy` + a small `nginx` sidecar) is deployed
+**once** per project. It terminates OAuth login, then nginx resolves `/<assistant-name>/...`
+to that instance's own Service **dynamically, by DNS, at request time** (not from a static
+config) and strips the `/<assistant-name>` prefix before forwarding — so the app itself
+needs no changes and never knows it's behind a path prefix. Because resolution is dynamic,
+deploying a new named instance requires **zero changes to the gateway** — it's found
+automatically as soon as its Service exists.
+
+```bash
+oc new-project pydantic-assistant   # or: oc project <existing-project>
+
+# One-time: deploy the shared gateway
+# Edit deployment/gateway-secret-proxy.yaml first: generate with openssl rand -base64 32
+oc apply -f deployment/gateway-serviceaccount.yaml
+oc apply -f deployment/gateway-secret-proxy.yaml
+oc apply -f deployment/gateway-configmap.yaml
+oc apply -f deployment/gateway-deployment.yaml
+oc apply -f deployment/gateway-service.yaml
+oc apply -f deployment/gateway-route.yaml
+
+# Required one-time step, same as section 4:
+oc adm policy add-cluster-role-to-user system:auth-delegator \
+  -z pydantic-gateway -n pydantic-assistant
+
+oc get route pydantic-gateway   # the one shared URL for every instance
+```
+
+Then deploy as many named instances as you like via the catalog template — each one only
+needs `ASSISTANT_NAME` plus the usual provider/model/storage parameters:
+
+```bash
+oc apply -f deployment/pydantic-assistant-name-template.yaml
+# or cluster-wide: oc apply -n openshift -f deployment/pydantic-assistant-name-template.yaml
+```
+
+In the web console: **+Add → From Catalog**, search "Pydantic Assistant (named instance)",
+set `ASSISTANT_NAME` (e.g. `workshop-alice`), fill in the rest, **Create**. It's then reachable
+at `https://<gateway-host>/workshop-alice/` — no Route of its own, no extra gateway step.
+Deploy another with a different `ASSISTANT_NAME` and it's immediately reachable the same way.
+
+**Notes / limitations:**
+- `ASSISTANT_NAME` must be a valid DNS label (lowercase alphanumeric + hyphens, starting with
+  a letter) — it becomes both the Kubernetes resource name prefix and the URL path segment.
+- The gateway only resolves instances in **its own namespace/project**.
+- `gateway-deployment.yaml`'s `NGINX_RESOLVER` env var defaults to OpenShift's in-cluster DNS
+  (`dns-default.openshift-dns.svc.cluster.local`); on vanilla Kubernetes, change it to
+  `kube-dns.kube-system.svc.cluster.local`.
+- A request to `/<assistant-name>` with no trailing slash gets a `301` redirect to
+  `/<assistant-name>/` first (so the app's relative links resolve correctly).
 
 ---
 
