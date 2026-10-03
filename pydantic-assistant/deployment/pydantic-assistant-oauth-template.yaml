@@ -11,9 +11,9 @@ metadata:
       admin must run once:
       "oc adm policy add-cluster-role-to-user system:auth-delegator -z <APP_NAME> -n <project>"
       so the proxy can validate tokens. See deployment/README.md for details.
-    openshift.io/provider-display-name: "kenghua_yeo"
+    openshift.io/provider-display-name: "RH Workshop"
     iconClass: icon-python
-    tags: "python,ai,pydantic-ai,chat,batch,oauth"
+    tags: "pydantic,agent,workshop"
 objects:
   - apiVersion: v1
     kind: Secret

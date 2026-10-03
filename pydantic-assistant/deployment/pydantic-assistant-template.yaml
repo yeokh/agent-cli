@@ -10,9 +10,9 @@ metadata:
       No cluster authentication is enforced — anyone who can reach the Route
       can use the app. For an OAuth-protected deployment, use the
       "Pydantic Assistant (OAuth)" template instead.
-    openshift.io/provider-display-name: "kenghua_yeo"
+    openshift.io/provider-display-name: "RH Workshop"
     iconClass: icon-python
-    tags: "python,ai,pydantic-ai,chat,batch"
+    tags: "pydantic,agent,workshop"
 objects:
   - apiVersion: v1
     kind: Secret

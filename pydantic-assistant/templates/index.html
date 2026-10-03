@@ -558,7 +558,7 @@ main { flex: 1; display: flex; min-height: 0; }
         <div id="batch-jobpack-row">
           <span class="label">Job Pack</span>
           <select id="batch-jobpack-select" title="Select a job pack to load"></select>
-          <button class="small" id="batch-jobpack-load-btn" title="Copy the selected job pack's files into agent/ and input/">&#8681; Load</button>
+          <button id="batch-jobpack-load-btn" title="Copy the selected job pack's files into agent/ and input/">&#8681; Load</button>
         </div>
         <span id="batch-metrics-chip" style="display:none"></span>
         <div class="spacer"></div>
@@ -961,7 +961,27 @@ async function openEditModal(folder, mode, filename) {
   setTimeout(() => (mode === "new" ? nameInput : content).focus(), 50);
 }
 
-$("agent-new-btn").onclick = () => openEditModal("agent", "new");
+$("agent-new-btn").onclick = () => {
+  const name = prompt("New agent file name (e.g. instruction.md):");
+  if (!name || !name.trim()) return;
+  saveAgentFile(name.trim(), "");
+};
+
+async function saveAgentFile(name, content) {
+  try {
+    const data = await api(`/api/file/agent/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    toast(`Saved agent/${name}`);
+    refreshFileLists();
+    if (name === "instruction.md" && data.display_messages) {
+      renderMessages(data.display_messages);
+    }
+  } catch (e) { toast(e.message, "error"); }
+}
+
 $("agent-modal-cancel").onclick = () => $("agent-edit-modal").classList.remove("open");
 
 $("agent-modal-save").onclick = async () => {

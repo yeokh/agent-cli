@@ -145,6 +145,12 @@ users who hold a specific permission (e.g. `get pods` in this project),
 uncomment the `--openshift-sar=...` line in `oauth-deployment.yaml`'s
 `oauth-proxy` container args and re-apply.
 
+Service accounts in OpenShift/Kubernetes are namespace-scoped resources:
+- Multiple applications in the same project can use the same service account by reference in
+  the deployment's field `serviceAccountName`.
+- If multiple projects need the same permissions, create identically-named service accounts in
+  each and grant them the same roles.
+
 ---
 
 ## 5. Deploy via the OpenShift catalog ("click to deploy")

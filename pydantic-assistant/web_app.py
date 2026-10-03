@@ -138,6 +138,17 @@ INTRO_MESSAGE = (
     "interactively here in Chat, or you can submit the same instructions as a Batch job."
 )
 
+# Starter instruction.md content, auto-created whenever agent/instruction.md is missing
+# (fresh install, manual deletion, etc.) so the app is never left without one.
+DEFAULT_INSTRUCTION = (
+    f"{INTRO_MESSAGE}\n\n"
+    "---\n\n"
+    "This is a starter `instruction.md`, created automatically because none existed yet. "
+    "Replace this content with your own instructions describing what you want the agent to "
+    "do — this file is the system prompt for both Chat and Batch mode. You can also load a "
+    "ready-made Job Pack from the Batch tab instead of writing your own.\n"
+)
+
 
 class ChatSession:
     """Thread-safe conversation session."""
@@ -343,7 +354,20 @@ def _append_job_history(snap: dict) -> None:
 # File helpers
 # ---------------------------------------------------------------------------
 
+def _ensure_default_instruction() -> None:
+    """Create a starter instruction.md in agent/ if one doesn't exist yet."""
+    if INSTRUCTION_FILE.is_file():
+        return
+    try:
+        INSTRUCTION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        INSTRUCTION_FILE.write_text(DEFAULT_INSTRUCTION, encoding="utf-8")
+        log.info("No instruction.md found — created a default one in %s", AGENT_DIR)
+    except OSError:
+        log.exception("Could not create default instruction.md")
+
+
 def _read_instruction() -> str:
+    _ensure_default_instruction()
     if INSTRUCTION_FILE.is_file():
         return INSTRUCTION_FILE.read_text(encoding="utf-8", errors="replace")
     return ""
@@ -898,7 +922,8 @@ def api_file(folder, filename):
 
         result = {"deleted": filename}
         if folder == "agent" and filename == "instruction.md":
-            chat_session.reset("")
+            # Never leave agent/ without an instruction.md — recreate the default.
+            chat_session.reset(_read_instruction())
             result.update(chat_session.snapshot())
         return jsonify(result)
 
