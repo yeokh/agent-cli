@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local System One Gateway
+#
+# Thin proxy that exposes POST /v1/systemone (and GET /v1/models) and forwards
+# to OpenRouter, Kev, Ollama, or any other System One-compatible upstream.
+#
+# ── Build ─────────────────────────────────────────────────────────────────────
+#
+#   podman build -t systemone-gateway:latest .
+#
+# ── Run (OpenRouter upstream) ─────────────────────────────────────────────────
+#
+#   podman run --rm -p 8009:8009 \
+#     -e UPSTREAM_BASE_URL=https://openrouter.ai/api \
+#     -e UPSTREAM_API_KEY="$OPENROUTER_API_KEY" \
+#     -e DEFAULT_MODEL=jev-latest \
+#     systemone-gateway:latest
+#
+# ── Run (local Kev on the host) ───────────────────────────────────────────────
+#
+#   podman run --rm -p 8009:8009 \
+#     -e UPSTREAM_BASE_URL=http://host.containers.internal:8010 \
+#     -e DEFAULT_MODEL=kev-latest \
+#     systemone-gateway:latest
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+USER root
+
+RUN microdnf install -y \
+        bash \
+        ca-certificates \
+        curl \
+        python3.11 \
+        python3.11-pip \
+        shadow-utils \
+    && microdnf clean all \
+    && ln -sf /usr/bin/python3.11 /usr/local/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/local/bin/python \
+    && ln -sf /usr/bin/pip3.11   /usr/local/bin/pip3 \
+    && ln -sf /usr/bin/pip3.11   /usr/local/bin/pip
+
+WORKDIR /app
+
+COPY requirements.txt /app/requirements.txt
+RUN pip3 install --no-cache-dir -r /app/requirements.txt
+
+COPY app /app/app
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Non-root user — uid 1001 / gid 0 for OpenShift restricted-v2 SCC
+RUN useradd -m -u 1001 -g 0 -s /bin/bash gateway \
+    && chown -R 1001:0 /app \
+    && chmod -R g+rwX /app
+
+USER 1001
+
+ENV HOME=/home/gateway
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV LISTEN_HOST=0.0.0.0
+ENV LISTEN_PORT=8009
+ENV UPSTREAM_BASE_URL=https://openrouter.ai/api
+ENV DEFAULT_MODEL=jev-latest
+
+EXPOSE 8009
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${LISTEN_PORT}/healthz" || exit 1
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
